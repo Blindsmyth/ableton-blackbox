@@ -1,4 +1,8 @@
 # Ableton Live .als to 1010music Blackbox .xml converter
+
+> **⚠️ IMPORTANT UPDATE (November 2024):** This is the original v0.2 documentation for Ableton Live 10/11.  
+> **📦 For Ableton Live 12 support**, please use `xml_read_v2.py` and see [README_v2.md](README_v2.md) and [QUICKSTART.md](QUICKSTART.md)
+
 ## What it does
 This script attempts to convert an Ableton Live `.als` project file to a 1010music Blackbox readable `.xml` file.
 What it currently does is the following:

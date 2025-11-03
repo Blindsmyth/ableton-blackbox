@@ -1,5 +1,21 @@
 #Ignore these directories:
 intermediate/
 data/
+output_*/
 
+# macOS
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
