@@ -1367,53 +1367,54 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             
             # Calculate step_len and step_count from clip length
             # Step length values (non-triplet only):
-            # 10 = 1/16, 8 = 1/8, 6 = 1/4, 4 = 1/2, 3 = 1 Bar, 2 = 2 Bars, 1 = 4 Bars, 0 = 8 Bars
+            # 14 = 1/64, 12 = 1/32, 10 = 1/16, 8 = 1/8, 6 = 1/4, 4 = 1/2, 3 = 1 Bar, 2 = 2 Bars, 1 = 4 Bars, 0 = 8 Bars
+            # Triplet values (odd numbers, not used): 13 = 1/32T, 11 = 1/16T, 9 = 1/8T, 7 = 1/4T, 5 = 1/2T
             # 1 bar = 4 beats
             # If no clip and no notes, use minimum length
             if not midi_clip and len(sublayer_events) == 0:
                 step_len = 10  # 1/16 notes
                 step_count = 1  # Minimum length for empty sublayer
             else:
-                # Start with 1/16 notes and calculate step_count
+                # Start with 1/16 notes (most common resolution) and go coarser only if needed
                 # At 1/16: 1 beat = 4 steps, 1 bar (4 beats) = 16 steps
                 step_count = int(clip_length_beats * 4)
-                step_len = 10  # 1/16 notes
+                step_len = 10  # 1/16 notes (default)
                 
-                # If step_count exceeds 256, increase step_len (use coarser resolution)
+                # If step_count exceeds 256, use coarser resolution
                 if step_count > 256:
                     # Try 1/8 notes: 1 beat = 2 steps, 1 bar = 8 steps
                     step_count = int(clip_length_beats * 2)
                     step_len = 8
                     
-                    if step_count > 256:
-                        # Try 1/4 notes: 1 beat = 1 step, 1 bar = 4 steps
-                        step_count = int(clip_length_beats * 1)
-                        step_len = 6
-                        
-                        if step_count > 256:
-                            # Try 1/2 notes: 2 beats = 1 step, 1 bar = 2 steps
-                            step_count = int(clip_length_beats * 0.5)
-                            step_len = 4
-                            
-                            if step_count > 256:
-                                # Try 1 Bar: 4 beats = 1 step
-                                step_count = int(clip_length_beats * 0.25)
-                                step_len = 3
-                                
-                                if step_count > 256:
-                                    # Try 2 Bars: 8 beats = 1 step
-                                    step_count = int(clip_length_beats * 0.125)
-                                    step_len = 2
-                                    
-                                    if step_count > 256:
-                                        # Try 4 Bars: 16 beats = 1 step
-                                        step_count = int(clip_length_beats * 0.0625)
-                                        step_len = 1
-                                        
-                                        if step_count > 256:
-                                            # Max: 8 Bars: 32 beats = 1 step
-                                            step_count = max(1, int(clip_length_beats * 0.03125))
-                                            step_len = 0
+                if step_count > 256:
+                    # Try 1/4 notes: 1 beat = 1 step, 1 bar = 4 steps
+                    step_count = int(clip_length_beats * 1)
+                    step_len = 6
+                    
+                if step_count > 256:
+                    # Try 1/2 notes: 2 beats = 1 step, 1 bar = 2 steps
+                    step_count = int(clip_length_beats * 0.5)
+                    step_len = 4
+                    
+                if step_count > 256:
+                    # Try 1 Bar: 4 beats = 1 step
+                    step_count = int(clip_length_beats * 0.25)
+                    step_len = 3
+                    
+                if step_count > 256:
+                    # Try 2 Bars: 8 beats = 1 step
+                    step_count = int(clip_length_beats * 0.125)
+                    step_len = 2
+                    
+                if step_count > 256:
+                    # Try 4 Bars: 16 beats = 1 step
+                    step_count = int(clip_length_beats * 0.0625)
+                    step_len = 1
+                    
+                if step_count > 256:
+                    # Max: 8 Bars: 32 beats = 1 step
+                    step_count = max(1, int(clip_length_beats * 0.03125))
+                    step_len = 0
                 
                 # Ensure step_count is at least 1
                 if step_count < 1:
