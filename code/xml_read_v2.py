@@ -1309,16 +1309,17 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
     Each MIDI track can have up to 4 clips mapped to sub-layers A/B/C/D.
     Each sublayer is created as a separate cell element with type="noteseq".
     
+    Timing:
+    - Pads mode sequences: 3840 ticks/beat (quantised to grid)
+    - Keys/MIDI mode sequences: 960 ticks/beat (precise timing)
+    
     Args:
         session: The Blackbox session element
         midi_tracks: List of MIDI track elements
         pad_list: List of pad info dictionaries
-        unquantised: If True, use precise timing (960 ticks per 16th note) instead of quantizing to steps
+        unquantised: Legacy parameter, now ignored (timing determined by sequence mode)
     """
-    if unquantised:
-        logger.info(f'Processing {len(midi_tracks)} MIDI tracks for sequences (UNQUANTISED mode, firmware 2.3+ format)...')
-    else:
-        logger.info(f'Processing {len(midi_tracks)} MIDI tracks for sequences (quantised to 16th notes, firmware 2.3+ format)...')
+    logger.info(f'Processing {len(midi_tracks)} MIDI tracks for sequences (firmware 2.3+ format)...')
     
     # Create MIDI note to pad number mapping for pads mode
     # In pads mode, each seqevent's pitch value (0-15) determines which pad gets triggered
@@ -1469,14 +1470,17 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         vel_val = int(float(velocity.attrib.get('Value', 100)))
                                     
                                     # Calculate timing (always use tick-based format for firmware 2.3+)
-                                    # Note: For unquantised mode, use 960 ticks per beat (1/4 of normal)
+                                    # Tick rate depends on sequence mode:
+                                    # - Pads mode: 3840 ticks/beat (quantised to grid)
+                                    # - Keys/MIDI mode: 960 ticks/beat (precise timing for melodic sequences)
                                     step = int(time_val * 4)  # 4 steps per beat
-                                    if unquantised:
-                                        strtks = int(time_val * 960)  # Unquantised: 960 ticks per beat
-                                        lentks = int(dur_val * 960)
-                                    else:
-                                        strtks = int(time_val * 3840)  # Quantised: 3840 ticks per beat
+                                    if seq_mode == 'Pads':
+                                        strtks = int(time_val * 3840)  # Pads: Standard tick rate
                                         lentks = int(dur_val * 3840)
+                                    else:
+                                        # Keys or MIDI mode: use precise timing
+                                        strtks = int(time_val * 960)  # Keys/MIDI: Precise tick rate
+                                        lentks = int(dur_val * 960)
                                     lencount = max(1, int(dur_val * 4))
                                     
                                     # Store event data
