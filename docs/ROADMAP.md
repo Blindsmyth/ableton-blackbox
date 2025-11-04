@@ -119,7 +119,152 @@ Detect if MIDI content is quantised to the grid and preserve unquantised timing 
 
 ---
 
-### 4. Song Mode (Arrangement View) 🎵
+### 4. Intelligent Step Length Detection 🎼
+**Priority**: Low  
+**Status**: Planned (May Break Current Workflow)
+
+#### Description
+Automatically detect the finest note resolution in MIDI clips (e.g., 1/32 notes, triplets) and choose appropriate step length and count accordingly.
+
+#### How it works currently
+- Default to 1/16 step length (`notesteplen=10`)
+- Only scale up to coarser resolutions (1/8, 1/4, etc.) when step count exceeds 256
+- Does not detect finer resolutions like 1/32 or 1/64
+- Does not use triplet values
+
+#### How it should work
+- Analyze MIDI clip to detect the finest note resolution used
+- If 1/32 notes are present: Use 1/32 step length (`notesteplen=12`) or 1/64 (`notesteplen=14`)
+- If triplets are present: Use appropriate triplet step length (11, 9, 7, 5, or 13)
+- Automatically adjust step count to match detected resolution
+- Fall back to 1/16 if no specific pattern detected
+
+#### Implementation Requirements
+1. **Resolution Detection Algorithm**:
+   - Calculate the minimum time difference between consecutive notes
+   - Detect common note patterns (16ths, 32nds, triplets)
+   - Check if notes align to triplet grid vs straight grid
+   
+2. **Triplet Detection**:
+   - Check if notes are spaced at 1/3 beat intervals (triplets)
+   - Examples:
+     - 1/16 triplets: 3 notes per beat at 1/3 spacing
+     - 1/8 triplets: 3 notes per 2 beats
+     - 1/4 triplets: 3 notes per bar
+   
+3. **Step Length Selection**:
+   ```python
+   def detect_step_length(midi_notes):
+       min_interval = calculate_min_note_interval(midi_notes)
+       
+       if is_triplet_pattern(midi_notes):
+           if min_interval <= 1/32:
+               return 13  # 1/32 triplet
+           elif min_interval <= 1/16:
+               return 11  # 1/16 triplet
+           elif min_interval <= 1/8:
+               return 9   # 1/8 triplet
+           # ... etc
+       else:
+           if min_interval <= 1/64:
+               return 14  # 1/64
+           elif min_interval <= 1/32:
+               return 12  # 1/32
+           elif min_interval <= 1/16:
+               return 10  # 1/16 (default)
+           # ... etc
+   ```
+
+4. **Step Count Adjustment**:
+   - After selecting step length, recalculate step count
+   - Ensure step count stays within 1-256 limit
+   - May need to compromise between resolution and length
+
+#### Potential Issues
+
+1. **Breaking Current Workflow**:
+   - Current default of 1/16 works well for most use cases
+   - Auto-detection might choose unexpected resolutions
+   - Could make sequences harder to edit in Blackbox
+
+2. **Ambiguous Patterns**:
+   - Some MIDI might have mixed resolutions (16ths + 32nds)
+   - Hard to decide which resolution to prioritize
+   - Unquantised MIDI might give false positives
+
+3. **Step Count Limitations**:
+   - 1/32 resolution uses twice as many steps as 1/16
+   - 1/64 uses four times as many steps
+   - Long sequences might exceed 256 step limit
+
+4. **User Expectations**:
+   - Users might expect 1/16 by default
+   - Auto-detection could be surprising
+   - May need manual override option
+
+#### Recommendations
+
+1. **Make it Optional**:
+   - Add command-line flag: `--detect-resolution` or `--smart-step-length`
+   - Keep current behavior as default
+   - Let users opt-in to intelligent detection
+
+2. **Provide Fallback**:
+   - If detected resolution causes step count > 256, fall back to coarser resolution
+   - Log a warning when this happens
+   - Show detected vs actual resolution in verbose mode
+
+3. **Add Configuration**:
+   ```yaml
+   sequences:
+     step_length:
+       mode: auto              # auto, fixed, smart
+       default: 1/16           # Default when mode=fixed
+       detect_triplets: false  # Enable triplet detection
+       detect_32nds: false     # Enable 1/32 detection
+       max_resolution: 1/16    # Finest resolution to use
+   ```
+
+4. **Testing Strategy**:
+   - Test with sequences containing only 16th notes → Should use 1/16
+   - Test with sequences containing 32nd notes → Should detect 1/32
+   - Test with triplet patterns → Should detect triplet step length
+   - Test with mixed patterns → Should handle gracefully
+   - Test with very long sequences → Should not exceed 256 steps
+
+#### Examples
+
+**Example 1: 1/32 Note Detection**
+```
+MIDI: [0.0, 0.125, 0.25, 0.375, 0.5]  # 32nd notes
+Detection: min_interval = 0.125 beats (1/32 of a bar)
+Result: notesteplen=12 (1/32), notestepcount=128 for 4 bars
+```
+
+**Example 2: Triplet Detection**
+```
+MIDI: [0.0, 0.333, 0.667, 1.0, 1.333]  # 8th note triplets
+Detection: Notes at 1/3 beat intervals
+Result: notesteplen=9 (1/8T), notestepcount=24 for 4 bars
+```
+
+**Example 3: Mixed Resolution (Fallback)**
+```
+MIDI: Mix of 16th and 32nd notes
+Detection: Conflicting resolutions
+Result: Fall back to 1/16 (safe default)
+Warning: "Mixed note resolutions detected, using 1/16"
+```
+
+#### Related Features
+- Works well with **Unquantised Sequences** feature
+- Both analyze note timing in detail
+- Could share detection algorithms
+- Might want to combine into one analysis pass
+
+---
+
+### 5. Song Mode (Arrangement View) 🎵
 **Priority**: Low  
 **Status**: Planned (Requires Refinement)
 
@@ -190,10 +335,11 @@ From the manual:
 ### Short Term
 3. **Unquantised Sequences** - Medium complexity, nice-to-have for precise timing
 
-### Long Term
-4. **Song Mode (Phase 1)** - Locator extraction
-5. **Song Mode (Phase 2)** - MIDI clip mapping
-6. **Song Mode (Phase 3)** - Audio clip handling (if feasible)
+### Long Term (Lower Priority)
+4. **Intelligent Step Length Detection** - Auto-detect 1/32 notes and triplets
+5. **Song Mode (Phase 1)** - Locator extraction
+6. **Song Mode (Phase 2)** - MIDI clip mapping
+7. **Song Mode (Phase 3)** - Audio clip handling (if feasible)
 
 ---
 
@@ -307,6 +453,13 @@ output:
 - [ ] Unquantised MIDI → `StepMode` OFF
 - [ ] Timing precision preserved
 - [ ] Mixed quantization in same project
+
+### Intelligent Step Length Tests
+- [ ] Only 16th notes → Use 1/16
+- [ ] 32nd notes present → Detect and use 1/32
+- [ ] Triplet pattern → Detect and use triplet step length
+- [ ] Mixed resolutions → Fall back to safe default
+- [ ] Long sequences with fine resolution → Handle 256 step limit
 
 ### Song Mode Tests
 - [ ] Locators extracted correctly
