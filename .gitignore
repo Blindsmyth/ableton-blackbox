@@ -3,6 +3,9 @@ intermediate/
 data/
 output_*/
 
+# Documentation
+docs/*.pdf
+
 # macOS
 .DS_Store
 
