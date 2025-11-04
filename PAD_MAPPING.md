@@ -2,20 +2,20 @@
 
 ## Visual Layout
 
-The Blackbox has 20 pads total: a 4x4 grid (16 pads) + 4 extra pads in column 5.
+The Blackbox has 16 pads in a 4x4 grid.
 
 ```
 Blackbox Pad Layout:
-┌────┬────┬────┬────┬────┐
-│ 0  │ 1  │ 2  │ 3  │ 16 │  Row 0
-├────┼────┼────┼────┼────┤
-│ 4  │ 5  │ 6  │ 7  │ 17 │  Row 1
-├────┼────┼────┼────┼────┤
-│ 8  │ 9  │ 10 │ 11 │ 18 │  Row 2
-├────┼────┼────┼────┼────┤
-│ 12 │ 13 │ 14 │ 15 │ 19 │  Row 3
-└────┴────┴────┴────┴────┘
-Col:  0    1    2    3    4
+┌────┬────┬────┬────┐
+│ 0  │ 1  │ 2  │ 3  │  Row 0
+├────┼────┼────┼────┤
+│ 4  │ 5  │ 6  │ 7  │  Row 1
+├────┼────┼────┼────┤
+│ 8  │ 9  │ 10 │ 11 │  Row 2
+├────┼────┼────┼────┤
+│ 12 │ 13 │ 14 │ 15 │  Row 3
+└────┴────┴────┴────┘
+Col:  0    1    2    3
 ```
 
 ## Mapping Logic
@@ -61,22 +61,16 @@ Audio Track 3        →      Pad 7
 
 **Example 2:** If you have 16 Simpler tracks (max):
 ```
-Simpler Track 1-16   →      Pads 0-15 (fills main grid)
-Audio Track 1        →      Pad 16  ← Spills into column 5
-Audio Track 2        →      Pad 17
-Audio Track 3        →      Pad 18
-Audio Track 4        →      Pad 19
+Simpler Track 1-16   →      Pads 0-15 (fills all 16 pads)
 ```
 
-**Example 3:** If you have 0 Simpler tracks (stems only):
+**Example 3:** If you have 0 Simpler tracks (audio clips only):
 ```
 Audio Track 1        →      Pad 0
 Audio Track 2        →      Pad 1
 Audio Track 3        →      Pad 2
 ...
 Audio Track 16       →      Pad 15
-Audio Track 17       →      Pad 16 (column 5)
-...
 ```
 
 **Settings for Audio Clip pads:**
@@ -111,14 +105,14 @@ def make_pads(from_ableton, clips, tempo):
             current_pad += 1
     
     # STEP 3: Fill remaining pads with empty templates
-    for i in range(current_pad, 20):
+    for i in range(current_pad, 16):
         # ... create empty pads ...
 ```
 
 ## Important Details
 
 ### Pad Numbering
-The internal pad numbering (0-19) maps to physical Blackbox layout like this:
+The internal pad numbering (0-15) maps to physical Blackbox layout like this:
 
 ```python
 row_column(pad):
@@ -126,7 +120,6 @@ row_column(pad):
     4:[1,0]   5:[1,1]   6:[1,2]   7:[1,3]   # Row 1
     8:[2,0]   9:[2,1]  10:[2,2]  11:[2,3]   # Row 2
    12:[3,0]  13:[3,1]  14:[3,2]  15:[3,3]   # Row 3
-   16:[0,4]  17:[1,4]  18:[2,4]  19:[3,4]   # Column 5
 ```
 
 ### Track Filtering
@@ -140,7 +133,7 @@ Only certain Ableton track types are extracted:
 
 ### Limitations
 1. **Max 16 Simpler/Sampler** - If you have more than 16, only the first 16 are used
-2. **No overflow protection** - If you have 16 Simpler + 5 audio clips = 21 total, but Blackbox only has 20 pads, the 21st would cause issues
+2. **Max 16 pads total** - Blackbox has 16 pads, so if you have 16 Simpler tracks, there's no room for additional audio clips
 3. **Order matters** - Tracks are processed in the order they appear in Ableton
 
 ## Practical Examples
@@ -192,7 +185,7 @@ After conversion, you can check the mapping by looking at the generated `preset.
 
 ```bash
 # View the cell mappings
-cat output/preset.xml | grep '<cell' | grep 'layer="0"' | head -20
+cat output/preset.xml | grep '<cell' | grep 'layer="0"' | head -16
 
 # Example output:
 # <cell column="0" filename=".\kick.wav" layer="0" row="0" type="sample">
@@ -217,7 +210,7 @@ INFO:   Device 1: OriginalSimpler
 
 ### For Stem-Based Workflow:
 1. Arrange your most important stems first in Ableton
-2. Keep to 16 audio tracks or less for main grid
+2. Max 16 total tracks (Simpler + Audio clips combined)
 3. Use clear, descriptive track names
 
 ### For Sample-Based Workflow:
@@ -236,7 +229,7 @@ INFO:   Device 1: OriginalSimpler
 
 **Audio tracks map sequentially AFTER** the Simpler/Sampler pads, continuing from wherever those left off.
 
-The script fills pads in order: **Simpler/Sampler first, then Audio clips, then empty pads** to fill up to 20 total.
+The script fills pads in order: **Simpler/Sampler first, then Audio clips, then empty pads** to fill all 16 pads.
 
 ---
 
