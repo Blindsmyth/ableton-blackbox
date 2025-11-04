@@ -393,7 +393,7 @@ def drum_rack_extract(drum_rack_device):
                         pad_info['simpler'] = simpler
                         pad_info['is_empty'] = False
             
-            # Only add pads that have a valid MIDI note/pad number
+            # Only add pads that have a valid pad number
             if pad_info['blackbox_pad'] is not None:
                 pad_list.append(pad_info)
                 
@@ -401,10 +401,10 @@ def drum_rack_extract(drum_rack_device):
                 choke_label = {0: 'X (none)', 1: 'A', 2: 'B', 3: 'C', 4: 'D'}.get(pad_info["choke_group"], str(pad_info["choke_group"]))
                 logger.info(f'  Chain {branch_index} → Pad {pad_info["blackbox_pad"]}: MIDI {pad_info["midi_note"]}, Choke: {choke_label}, Has Simpler: {not pad_info["is_empty"]}')
             else:
-                logger.debug(f'  Chain {branch_index}: Skipped (no MIDI note assigned)')
+                logger.debug(f'  Chain {branch_index}: Skipped (no valid pad number)')
         
-        # Sort pad list by blackbox pad number (not chain order)
-        pad_list.sort(key=lambda p: p['blackbox_pad'])
+        # Keep pads in chain order (don't sort - preserve the order they appear in Ableton)
+        # This ensures the visual layout matches what the user sees in Ableton
         
         logger.info(f'Extracted {len(pad_list)} drum rack pads')
         return pad_list
@@ -1030,10 +1030,11 @@ def make_drum_rack_pads(session, pad_list, tempo):
                     # Calculate beats from duration and tempo
                     # beats = (duration_seconds * tempo) / 60
                     beats_calculated = (sample_duration * tempo) / 60
-                    # Round to nearest 4 beats (1 bar at 4/4)
-                    beat_count = int(((beats_calculated + 2) // 4) * 4)
-                    if beat_count < 4:
-                        beat_count = int(beats_calculated)  # Don't round up if less than 1 bar
+                    # Round to nearest beat (not to nearest 4 beats) for accuracy
+                    # This matches Ableton's calculation more closely
+                    beat_count = int(round(beats_calculated))
+                    if beat_count < 1:
+                        beat_count = 0
                     logger.debug(f'    Calculated {beat_count} beats from {sample_duration:.2f}s @ {tempo} BPM')
                 
                 if beat_count > 0:
@@ -1060,8 +1061,10 @@ def make_drum_rack_pads(session, pad_list, tempo):
                             loop_length_seconds = loop_length_samples / wav_info['sample_rate']
                             
                             # Calculate beats from duration and tempo
-                            beats = int((loop_length_seconds * tempo) / 60)
-                            beats = ((beats + 2) // 4) * 4  # Round to nearest 4 beats
+                            beats_calculated = (loop_length_seconds * tempo) / 60
+                            beats = int(round(beats_calculated))  # Round to nearest beat
+                            if beats < 1:
+                                beats = 0
                             
                             if beats >= 8:
                                 cellmode = '1'  # Clip mode
@@ -1082,11 +1085,26 @@ def make_drum_rack_pads(session, pad_list, tempo):
                 
                 # Create params element
                 param_elem = ET.SubElement(cell, 'params')
+                
+                # For clip mode samples, use default envelope settings
+                # 0% attack, 100% decay, 100% sustain, 20% release
+                if cellmode == '1':  # Clip mode
+                    env_attack = '0'
+                    env_decay = '1000'  # 100% = 1000
+                    env_sustain = '1000'  # 100% = 1000
+                    env_release = '200'  # 20% = 200
+                else:
+                    # Use extracted envelope settings for sampler mode
+                    env_attack = params.get('attack', '0')
+                    env_decay = params.get('decay', '0')
+                    env_sustain = params.get('sustain', '1000')
+                    env_release = params.get('release', '4')
+                
                 param_attrib = pad_params_dicter(
-                    params.get('attack', '0'),
-                    params.get('decay', '0'),
-                    params.get('sustain', '1000'),
-                    params.get('release', '4'),
+                    env_attack,
+                    env_decay,
+                    env_sustain,
+                    env_release,
                     params.get('sample_start', '0'),
                     samlen,  # Use actual sample length from WAV file
                     params.get('multisammode', '0'),
@@ -1163,6 +1181,25 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
     else:
         logger.info(f'Processing {len(midi_tracks)} MIDI tracks for sequences (quantised to 16th notes, firmware 2.3+ format)...')
     
+    # Create MIDI note to pad number mapping for pads mode
+    # In pads mode, each seqevent's pitch value (0-15) determines which pad gets triggered
+    midi_to_pad = {}
+    for pad in pad_list:
+        if pad.get('midi_note') is not None:
+            midi_to_pad[pad['midi_note']] = pad['blackbox_pad']
+    
+    # Fallback: If no MIDI notes found in pad_list, use standard mapping
+    # Standard drum rack convention: MIDI note 36 (C1) = pad 0, 37 (C#1) = pad 1, etc.
+    if not midi_to_pad:
+        logger.warning('No MIDI notes found in pad_list, using standard mapping (36-51 → 0-15)')
+        for pad in pad_list:
+            pad_num = pad.get('blackbox_pad')
+            if pad_num is not None:
+                # Map pad number to MIDI note (36 + pad_num)
+                midi_to_pad[36 + pad_num] = pad_num
+    
+    logger.debug(f'Created MIDI note to pad mapping: {midi_to_pad}')
+    
     for track_idx, track in enumerate(midi_tracks[:16]):
         if track_idx >= len(pad_list):
             break
@@ -1216,7 +1253,7 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             # Get the MIDI clip for this sublayer if it exists
             midi_clip = sub_layers[sublayer_idx] if sublayer_idx < len(sub_layers) else None
             
-            # Extract all notes for this sublayer
+            # Extract all notes for this sublayer first (to check if we have events)
             sublayer_events = []
             
             if midi_clip:
@@ -1231,6 +1268,12 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                             
                             if midi_key is not None and 'Value' in midi_key.attrib and notes_elem is not None and len(notes_elem) > 0:
                                 midi_note = int(midi_key.attrib['Value'])
+                                
+                                # Map MIDI note to pad number (0-15) for pads mode
+                                # In pads mode, the chan parameter determines which pad gets triggered: chan = 256 + pad_number
+                                # pitch should always be 0 in pads mode
+                                pad_number = midi_to_pad.get(midi_note, 0)
+                                chan_value = 256 + pad_number
                                 
                                 # Extract note events
                                 for note_event in notes_elem:
@@ -1260,14 +1303,103 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                     # Store event data
                                     sublayer_events.append({
                                         'step': step,
-                                        'chan': '256',  # Default sampler channel
+                                        'chan': str(chan_value),  # Pads mode: chan = 256 + pad_number
                                         'type': 'note',
                                         'strtks': strtks,
-                                        'pitch': midi_note,  # Use actual MIDI note from Ableton
+                                        'pitch': 0,  # Pads mode: pitch is always 0
                                         'lencount': lencount,
                                         'lentks': lentks,
                                         'velocity': vel_val
                                     })
+            
+            # Extract clip length from MIDI clip to calculate step_count
+            # Try multiple methods: LoopEnd, CurrentEnd, or calculate from note positions
+            clip_length_beats = 1.0  # Default to 1 beat
+            if midi_clip:
+                # Method 1: Try LoopStart/LoopEnd
+                loop_start_elem = find_element_by_tag(midi_clip, 'LoopStart')
+                loop_end_elem = find_element_by_tag(midi_clip, 'LoopEnd')
+                
+                if loop_start_elem is not None and 'Value' in loop_start_elem.attrib and \
+                   loop_end_elem is not None and 'Value' in loop_end_elem.attrib:
+                    try:
+                        loop_start = float(loop_start_elem.attrib['Value'])
+                        loop_end = float(loop_end_elem.attrib['Value'])
+                        clip_length_beats = loop_end - loop_start
+                        if clip_length_beats <= 0:
+                            clip_length_beats = loop_end  # Use LoopEnd directly if difference is 0
+                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Clip length from LoopStart/LoopEnd = {clip_length_beats} beats')
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Error extracting LoopStart/LoopEnd: {e}')
+                
+                # Method 2: If LoopEnd not found, try CurrentEnd
+                if clip_length_beats <= 1.0:
+                    current_end_elem = find_element_by_tag(midi_clip, 'CurrentEnd')
+                    if current_end_elem is not None and 'Value' in current_end_elem.attrib:
+                        try:
+                            clip_length_beats = float(current_end_elem.attrib['Value'])
+                            logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Clip length from CurrentEnd = {clip_length_beats} beats')
+                        except (ValueError, TypeError):
+                            pass
+                
+                # Method 3: Calculate from note positions (use latest note end time)
+                if clip_length_beats <= 1.0 and len(sublayer_events) > 0:
+                    max_time = 0.0
+                    for event in sublayer_events:
+                        # Calculate note end time from step and duration
+                        # step is in 16th notes, so divide by 4 to get beats
+                        note_start_beats = event['step'] / 4.0
+                        note_duration_beats = event['lencount'] / 4.0
+                        note_end_beats = note_start_beats + note_duration_beats
+                        max_time = max(max_time, note_end_beats)
+                    
+                    if max_time > 0:
+                        # Round up to nearest bar (4 beats) for sequence length
+                        clip_length_beats = int((max_time + 3) // 4) * 4
+                        if clip_length_beats < 4:
+                            clip_length_beats = max(4.0, max_time)  # At least 1 bar
+                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Clip length calculated from notes = {clip_length_beats} beats (max note end: {max_time})')
+                
+                # If still no length found, use default
+                if clip_length_beats <= 1.0:
+                    logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Using default clip length = 1.0 beat')
+                    clip_length_beats = 1.0
+            
+            # Calculate step_len and step_count from clip length
+            # 1 bar = 4 beats = 16 steps at step_len 1/16 (10)
+            # So: step_count = beats * 4 (since 1 beat = 4 steps at 16th note resolution)
+            # If no clip and no notes, use minimum length
+            if not midi_clip and len(sublayer_events) == 0:
+                step_len = 10
+                step_count = 1  # Minimum length for empty sublayer
+            else:
+                step_len = 10  # 1/16 notes (default)
+                # Convert beats to steps: 1 beat = 4 steps (16th notes), so 1 bar = 16 steps
+                step_count = int(clip_length_beats * 4)  # 4 steps per beat
+                
+                # If step_count exceeds 256, increase step_len
+                if step_count > 256:
+                    # Try 1/8 notes (11): 1 beat = 2 steps, 1 bar = 8 steps
+                    step_count = int(clip_length_beats * 2)
+                    step_len = 11
+                    if step_count > 256:
+                        # Try 1/4 notes (12): 1 beat = 1 step, 1 bar = 4 steps
+                        step_count = int(clip_length_beats * 1)
+                        step_len = 12
+                        if step_count > 256:
+                            # Try 1/2 notes (13): 1 beat = 0.5 steps, 1 bar = 2 steps
+                            step_count = int(clip_length_beats * 0.5)
+                            step_len = 13
+                            if step_count > 256:
+                                # Try whole notes (14): 1 beat = 0.25 steps, 1 bar = 1 step
+                                step_count = max(1, int(clip_length_beats * 0.25))
+                                step_len = 14
+                
+                # Ensure step_count is at least 1
+                if step_count < 1:
+                    step_count = 1
+                
+                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: {clip_length_beats} beats → step_count={step_count}, step_len={step_len}')
             
             # Track first layer with notes for activeseqlayer
             if sublayer_events and first_layer_with_notes == -1:
@@ -1285,15 +1417,15 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                 'type': 'noteseq'
             }
             
-            # Add params
+            # Add params with calculated step_len and step_count
             params = ET.SubElement(cell, 'params')
             params.attrib = {
-                'notesteplen': '10',  # 16th notes
-                'notestepcount': '16',  # Default 16 steps (can be extended based on content)
+                'notesteplen': str(step_len),  # Calculated based on clip length
+                'notestepcount': str(step_count),  # Calculated from clip length
                 'dutycyc': '1000',
                 'quantsizeseq': '1',
                 'dispmode': '1' if sublayer_idx == 0 else '0',  # Only first layer visible by default
-                'seqpadmapdest': '0',  # 0 = Pad mode (default)
+                'seqpadmapdest': str(pad_num),  # Pad number where this sequence is located (for pads mode)
                 'seqplayenable': '1' if sublayer_events else '0',  # Enable if has notes
                 'activeseqlayer': str(first_layer_with_notes if first_layer_with_notes >= 0 else 0),
                 'midioutchan': '0',
@@ -1310,10 +1442,12 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                     'chan': str(event_data['chan']),
                     'type': event_data['type'],
                     'strtks': str(event_data['strtks']),
-                    'pitch': str(event_data['pitch']),
                     'lencount': str(event_data['lencount']),
                     'lentks': str(event_data['lentks'])
                 }
+                # In pads mode (seqstepmode=1), pitch should be the pad number (0-15)
+                # This tells Blackbox which pad to trigger: pitch=0 → pad 0, pitch=1 → pad 1, etc.
+                seqevent.attrib['pitch'] = str(event_data['pitch'])
                 if event_data['velocity'] != 100:
                     seqevent.attrib['velocity'] = str(event_data['velocity'])
             
