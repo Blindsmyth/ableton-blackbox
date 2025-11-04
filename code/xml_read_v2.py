@@ -1140,15 +1140,21 @@ def make_drum_rack_pads(session, pad_list, tempo):
                     # Sample has beat count (either from warp or calculated)
                     beatcount = str(beat_count)
                     
-                    # If it's a long sample (> 8 beats / 2 bars), use clip mode
-                    if beat_count >= 8:
-                        cellmode = '1'  # Clip mode for longer samples
+                    # Only use clip mode if sample is explicitly warped
+                    # Unwarped samples stay in sampler mode regardless of length
+                    if warp_info.get('is_warped', False) and beat_count >= 8:
+                        cellmode = '1'  # Clip mode for warped longer samples
                         loopmode = '1'  # Loop enabled
-                        logger.info(f'    → Sample with warp info: {beat_count} beats ({beat_count/4} bars), clip mode enabled')
+                        logger.info(f'    → Warped sample: {beat_count} beats ({beat_count/4} bars), clip mode enabled')
                     else:
-                        # Short sample - sampler mode with loop
-                        loopmode = '1'  # Loop enabled
-                        logger.info(f'    → Sample with warp info: {beat_count} beats ({beat_count/4} bars), sampler mode with loop')
+                        # Unwarped or short sample - sampler mode
+                        if warp_info.get('is_warped', False):
+                            loopmode = '1'  # Loop enabled for warped samples
+                            logger.info(f'    → Warped sample: {beat_count} beats ({beat_count/4} bars), sampler mode with loop')
+                        else:
+                            # Unwarped sample - don't enable loop by default
+                            loopmode = '0'
+                            logger.info(f'    → Unwarped sample: {beat_count} beats ({beat_count/4} bars), sampler mode (no auto-loop)')
                 else:
                     # No warp beat info - check if loop is manually enabled
                     loop_on = params.get('loop_on', '0') == '1' or params.get('loop_on', '0') == 'true'
