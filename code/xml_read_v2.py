@@ -165,6 +165,48 @@ def find_element_by_tag(parent, tag):
     return None
 
 
+def extract_first_midi_note_from_track(midi_track):
+    """
+    Extract the first MIDI note played in any clip of this MIDI track.
+    Used for Keys mode to determine which pad the sequence targets.
+    
+    Returns:
+        int: MIDI note number, or None if no notes found
+    """
+    try:
+        device_chain = find_element_by_tag(midi_track, 'DeviceChain')
+        if not device_chain:
+            return None
+        
+        main_sequencer = find_element_by_tag(device_chain, 'MainSequencer')
+        if not main_sequencer:
+            return None
+        
+        clip_slot_list = find_element_by_tag(main_sequencer, 'ClipSlotList')
+        if not clip_slot_list:
+            return None
+        
+        # Check all clip slots for a MIDI clip
+        for clip_slot in list(clip_slot_list):
+            if len(clip_slot) > 1:
+                clip_slot_value = clip_slot[1]
+                if len(clip_slot_value) > 0:
+                    midi_clip = clip_slot_value[0][0]
+                    notes = midi_clip.find('.//Notes/KeyTracks')
+                    if notes and len(notes) > 0:
+                        # Get first key track
+                        key_track = notes[0]
+                        midi_key = find_element_by_tag(key_track, 'MidiKey')
+                        if midi_key and 'Value' in midi_key.attrib:
+                            return int(midi_key.attrib['Value'])
+        
+        return None
+        
+    except Exception as e:
+        logger.debug(f'  Error extracting MIDI note: {e}')
+        return None
+
+
 def detect_sequence_mode(midi_track):
     """
     Detect the sequence mode for a MIDI track based on its routing.
@@ -1267,10 +1309,34 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
         pad_num = track_idx  # Direct mapping: MIDI track 1 -> Pad 0, etc.
         row, column = row_column(pad_num)
         
-        # For Keys mode, override pad_num with the target pad
-        target_pad = mode_target if seq_mode == 'Keys' else pad_num
+        # For Keys mode, try to determine target pad from MIDI notes instead of chain index
+        # This handles cases where drum racks have custom MIDI note mappings
+        target_pad = pad_num  # Default
+        if seq_mode == 'Keys':
+            # Extract first MIDI note from this track's clips
+            first_midi_note = extract_first_midi_note_from_track(track)
+            if first_midi_note is not None:
+                logger.debug(f'  Keys mode: First MIDI note is {first_midi_note}')
+                # Try to find which pad responds to this MIDI note
+                target_found = False
+                for pad in pad_list:
+                    if pad.get('midi_note') == first_midi_note:
+                        target_pad = pad['blackbox_pad']
+                        target_found = True
+                        logger.info(f'  Keys mode: MIDI note {first_midi_note} maps to Pad {target_pad}')
+                        break
+                
+                if not target_found:
+                    # MIDI note not found in drum rack, fall back to chain index or track index
+                    logger.warning(f'  Keys mode: MIDI note {first_midi_note} not found in drum rack pads')
+                    logger.warning(f'  Using track position as target (Pad {pad_num})')
+                    target_pad = pad_num
+            else:
+                # No MIDI notes found, use chain index from routing
+                target_pad = mode_target if mode_target is not None else pad_num
+                logger.debug(f'  Keys mode: No MIDI notes found, using chain index {target_pad}')
         
-        logger.info(f'Track {track_idx}: Mode={seq_mode}, Target={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
+        logger.info(f'Track {track_idx}: Mode={seq_mode}, MIDI routing target={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
         
         # Extract up to 4 MIDI clips as sub-layers
         sub_layers = []
