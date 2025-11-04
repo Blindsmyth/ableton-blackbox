@@ -2,8 +2,15 @@
 
 ## Current Testing: An mir Vorbei test unquantised
 
-### Issue 1: Keys Mode Destination Detection ❌
-**Status**: Needs Fix  
+### Summary of Fixes
+- ✅ **Issue #3 FIXED**: Unquantised timing now correct (960 ticks/beat)
+- ✅ **Issue #2 FIXED**: Pad 8 now in sampler mode (not clip mode)
+- ⚠️ **Issue #1 PARTIAL**: Keys mode detection improved but needs more work
+
+---
+
+### Issue 1: Keys Mode Destination Detection ⚠️
+**Status**: Partially Fixed  
 **Severity**: High
 
 **Problem**:
@@ -17,26 +24,26 @@
 - Drum rack has custom MIDI mappings (notes 77-92 instead of standard 36-51)
 - Sequence plays MIDI note 48, which doesn't match any drum rack pad
 
-**Possible Solutions**:
-1. **Option A**: Analyze MIDI notes in sequence to determine target pad
-   - Check which notes are most common in the sequence
-   - Map those notes to drum rack pads based on ReceivingNote
-   
-2. **Option B**: Use first MIDI note in sequence to determine pad
-   - Take first note (e.g., 48) and find which pad responds to it
-   - If no pad found, default to chain index
-   
-3. **Option C**: Manual override flag
-   - Add `--keys-pad-mapping` option
-   - Let user specify which sequences target which pads
+**Attempted Fix (Partial)**:
+- Added `extract_first_midi_note_from_track()` function
+- Improved sequence generation to map MIDI notes to pads
+- Commit: dab9bf3
 
-**Recommended**: Option B (use first MIDI note to find target pad)
+**Current Issue**:
+- MIDI notes not being populated in `pad_list` during drum rack extraction
+- Warning: "No MIDI notes found in pad_list, using standard mapping (36-51 → 0-15)"
+- Need to debug why `ReceivingNote` values aren't being stored in pad_info
+
+**Next Steps**:
+1. Debug drum_rack_extract to ensure midi_note is properly extracted
+2. Verify ReceivingNote values are being read from XML
+3. Test with updated pad_list that includes MIDI notes
 
 ---
 
-### Issue 2: Pad 8 Clip Mode Incorrectly Enabled ❌
-**Status**: Needs Investigation  
-**Severity**: Medium
+### Issue 2: Pad 8 Clip Mode Incorrectly Enabled ✅
+**Status**: FIXED  
+**Severity**: Medium (was)
 
 **Problem**:
 - Pad 8 has unwarped sample but is set to clip mode
@@ -53,14 +60,17 @@
 - Verify `WarpOn` parameter extraction
 - Check beat count calculation triggering clip mode
 
-**Workaround**:
-- Manually edit `cellmode="0"` in preset.xml for pad 8
+**Fix Applied**:
+- Modified `make_drum_rack_pads()` to only enable clip mode for explicitly warped samples
+- Checks `warp_info['is_warped']` before enabling clip mode
+- Unwarped samples now stay in sampler mode regardless of length
+- Commit: 72bd680
 
 ---
 
-### Issue 3: Unquantised Sequence Timing 4x Too Slow ❌
-**Status**: Critical Bug  
-**Severity**: High
+### Issue 3: Unquantised Sequence Timing 4x Too Slow ✅
+**Status**: FIXED  
+**Severity**: High (was)
 
 **Problem**:
 - Unquantised sequences play at 1/4 speed
@@ -106,11 +116,12 @@ If 4x too slow, maybe should be:
   strtks = int(time_val * 960)  # Use 960 ticks per 1/16?
 ```
 
-**Testing Needed**:
-1. Try dividing strtks by 4: `strtks = int(time_val * 960)`
-2. Check if step calculation also needs adjustment
-3. Test with different step lengths
-4. Compare with working Pads mode sequences
+**Fix Applied**:
+- Modified tick calculation for unquantised mode
+- Changed from 3840 ticks/beat to 960 ticks/beat when `--unquantised` flag is set
+- Verified: Event at 0.632 beats now has strtks=606 (was 2427)
+- Ratio: 4.0x reduction (exactly as needed)
+- Commit: 9f69431
 
 ---
 
@@ -148,11 +159,14 @@ else:
 
 ---
 
-## Priority
+## Completed Fixes
 
-1. **Critical**: Fix unquantised timing (Issue #3)
-2. **High**: Fix Keys mode destination (Issue #1)
-3. **Medium**: Fix pad 8 clip mode (Issue #2)
+1. ✅ **Issue #3**: Unquantised timing (Commit: 9f69431)
+2. ✅ **Issue #2**: Pad 8 clip mode (Commit: 72bd680)
+
+## Remaining Work
+
+1. ⚠️ **Issue #1**: Keys mode destination detection (Partial fix: dab9bf3)
 
 ---
 
