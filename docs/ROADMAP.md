@@ -102,9 +102,11 @@ Detect if MIDI content is quantised to the grid and preserve unquantised timing 
 #### Implementation Requirements
 1. Analyze MIDI clip notes to detect if they're quantised to grid
 2. Algorithm to determine quantisation:
-   - Check if note start times align to 16th/8th/4th note grid
+   - Check if note start times align to 16th/8th/4th note grid (straight)
+   - Check if note start times align to triplet grid
    - Calculate deviation from nearest grid position
    - If deviation exceeds threshold (e.g., > 10 ticks), mark as unquantised
+   - **If both triplet and straight timing detected, mark as unquantised**
 3. Set `StepMode` parameter accordingly
 4. Ensure tick-based timing (`strtks`, `lentks`) is precise
 
@@ -155,23 +157,30 @@ Automatically detect the finest note resolution in MIDI clips (e.g., 1/32 notes,
 3. **Step Length Selection**:
    ```python
    def detect_step_length(midi_notes):
+       has_triplets = has_triplet_pattern(midi_notes)
+       has_straight = has_straight_pattern(midi_notes)
+       
+       # Mixed triplet and straight → treat as unquantised
+       if has_triplets and has_straight:
+           return None, True  # None step_len, unquantised=True
+       
        min_interval = calculate_min_note_interval(midi_notes)
        
-       if is_triplet_pattern(midi_notes):
+       if has_triplets:
            if min_interval <= 1/32:
-               return 13  # 1/32 triplet
+               return 13, False  # 1/32 triplet
            elif min_interval <= 1/16:
-               return 11  # 1/16 triplet
+               return 11, False  # 1/16 triplet
            elif min_interval <= 1/8:
-               return 9   # 1/8 triplet
+               return 9, False   # 1/8 triplet
            # ... etc
        else:
            if min_interval <= 1/64:
-               return 14  # 1/64
+               return 14, False  # 1/64
            elif min_interval <= 1/32:
-               return 12  # 1/32
+               return 12, False  # 1/32
            elif min_interval <= 1/16:
-               return 10  # 1/16 (default)
+               return 10, False  # 1/16 (default)
            # ... etc
    ```
 
@@ -191,6 +200,7 @@ Automatically detect the finest note resolution in MIDI clips (e.g., 1/32 notes,
    - Some MIDI might have mixed resolutions (16ths + 32nds)
    - Hard to decide which resolution to prioritize
    - Unquantised MIDI might give false positives
+   - **Mixed triplet and straight notes → Should be treated as unquantised**
 
 3. **Step Count Limitations**:
    - 1/32 resolution uses twice as many steps as 1/16
@@ -250,10 +260,18 @@ Result: notesteplen=9 (1/8T), notestepcount=24 for 4 bars
 
 **Example 3: Mixed Resolution (Fallback)**
 ```
-MIDI: Mix of 16th and 32nd notes
-Detection: Conflicting resolutions
+MIDI: Mix of 16th and 32nd notes (both straight)
+Detection: Conflicting straight-note resolutions
 Result: Fall back to 1/16 (safe default)
 Warning: "Mixed note resolutions detected, using 1/16"
+```
+
+**Example 4: Mixed Triplet and Straight (Unquantised)**
+```
+MIDI: Some notes on triplet grid, some on straight 16th grid
+Detection: Both triplet and straight timing detected
+Result: Treat as unquantised (StepMode OFF)
+Reason: Likely intentional expressive timing
 ```
 
 #### Related Features
@@ -261,6 +279,7 @@ Warning: "Mixed note resolutions detected, using 1/16"
 - Both analyze note timing in detail
 - Could share detection algorithms
 - Might want to combine into one analysis pass
+- **Key Integration**: If pattern uses both triplets and straight notes, treat as unquantised rather than choosing one grid
 
 ---
 
@@ -449,16 +468,19 @@ output:
 - [ ] MIDI CC/automation (future)
 
 ### Unquantised Tests
-- [ ] Quantised MIDI → `StepMode` ON
-- [ ] Unquantised MIDI → `StepMode` OFF
+- [ ] Quantised MIDI (straight grid) → `StepMode` ON
+- [ ] Quantised MIDI (triplet grid) → `StepMode` ON
+- [ ] Unquantised MIDI (off-grid) → `StepMode` OFF
+- [ ] Mixed triplet + straight notes → `StepMode` OFF (treat as unquantised)
 - [ ] Timing precision preserved
 - [ ] Mixed quantization in same project
 
 ### Intelligent Step Length Tests
-- [ ] Only 16th notes → Use 1/16
-- [ ] 32nd notes present → Detect and use 1/32
-- [ ] Triplet pattern → Detect and use triplet step length
-- [ ] Mixed resolutions → Fall back to safe default
+- [ ] Only straight 16th notes → Use 1/16
+- [ ] Only straight 32nd notes → Detect and use 1/32
+- [ ] Only triplet pattern → Detect and use triplet step length
+- [ ] Mixed straight resolutions (16ths + 32nds) → Fall back to safe default
+- [ ] Mixed triplet + straight → Treat as unquantised (StepMode OFF)
 - [ ] Long sequences with fine resolution → Handle 256 step limit
 
 ### Song Mode Tests
