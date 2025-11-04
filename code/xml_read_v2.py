@@ -165,6 +165,63 @@ def find_element_by_tag(parent, tag):
     return None
 
 
+def detect_sequence_mode(midi_track):
+    """
+    Detect the sequence mode for a MIDI track based on its routing.
+    
+    Returns:
+        tuple: (mode, target)
+        - mode: 'Keys', 'MIDI', or 'Pads'
+        - target: For Keys mode: chain index (int), For MIDI mode: channel (int), For Pads mode: None
+    
+    Routing patterns:
+        - Keys Mode: MidiOut/Track.XX/DeviceIn.Y.Z (routed to specific drum rack pad)
+        - MIDI Mode: MidiOut/External.Dev:DeviceName/Channel (routed to external MIDI)
+        - Pads Mode: MidiOut/Track.XX/TrackIn or MidiOut/None (routed to entire drum rack)
+    """
+    try:
+        # Find MidiOutputRouting/Target element (search recursively)
+        midi_output_routing = midi_track.find('.//MidiOutputRouting')
+        if midi_output_routing is None:
+            logger.debug('  No MidiOutputRouting found, defaulting to Pads mode')
+            return 'Pads', None
+        
+        target_elem = find_element_by_tag(midi_output_routing, 'Target')
+        if target_elem is None or 'Value' not in target_elem.attrib:
+            logger.debug('  No routing Target found, defaulting to Pads mode')
+            return 'Pads', None
+        
+        target = target_elem.attrib['Value']
+        logger.debug(f'  Routing target: {target}')
+        
+        # Check for Keys mode: MidiOut/Track.XX/DeviceIn.Y.Z
+        if '/DeviceIn.' in target:
+            # Extract chain index from DeviceIn.Y.Z format
+            device_part = target.split('/DeviceIn.')[-1]
+            chain_index = int(device_part.split('.')[0])
+            logger.info(f'  Detected Keys mode → Pad {chain_index}')
+            return 'Keys', chain_index
+        
+        # Check for MIDI mode: MidiOut/External.Dev:
+        if '/External.Dev:' in target or '/External/' in target:
+            # Extract MIDI channel if present (usually ends with /Channel)
+            channel = 0  # Default to channel 0 (Ch1)
+            if '/' in target:
+                parts = target.split('/')
+                if parts[-1].isdigit():
+                    channel = int(parts[-1])
+            logger.info(f'  Detected MIDI mode → Channel {channel}')
+            return 'MIDI', channel
+        
+        # Default to Pads mode (TrackIn or None)
+        logger.debug('  Defaulting to Pads mode')
+        return 'Pads', None
+        
+    except Exception as e:
+        logger.warning(f'  Error detecting sequence mode: {e}, defaulting to Pads mode')
+        return 'Pads', None
+
+
 def find_tempo(root):
     """
     Find tempo in the project using tag-based navigation.
@@ -1204,8 +1261,16 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
         if track_idx >= len(pad_list):
             break
         
+        # Detect sequence mode for this track
+        seq_mode, mode_target = detect_sequence_mode(track)
+        
         pad_num = track_idx  # Direct mapping: MIDI track 1 -> Pad 0, etc.
         row, column = row_column(pad_num)
+        
+        # For Keys mode, override pad_num with the target pad
+        target_pad = mode_target if seq_mode == 'Keys' else pad_num
+        
+        logger.info(f'Track {track_idx}: Mode={seq_mode}, Target={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
         
         # Extract up to 4 MIDI clips as sub-layers
         sub_layers = []
@@ -1269,11 +1334,20 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                             if midi_key is not None and 'Value' in midi_key.attrib and notes_elem is not None and len(notes_elem) > 0:
                                 midi_note = int(midi_key.attrib['Value'])
                                 
-                                # Map MIDI note to pad number (0-15) for pads mode
-                                # In pads mode, the chan parameter determines which pad gets triggered: chan = 256 + pad_number
-                                # pitch should always be 0 in pads mode
-                                pad_number = midi_to_pad.get(midi_note, 0)
-                                chan_value = 256 + pad_number
+                                # Determine chan and pitch based on sequence mode
+                                if seq_mode == 'Pads':
+                                    # Pads mode: chan determines pad, pitch is always 0
+                                    pad_number = midi_to_pad.get(midi_note, 0)
+                                    event_chan = 256 + pad_number
+                                    event_pitch = 0
+                                elif seq_mode == 'Keys':
+                                    # Keys mode: pitch is the MIDI note, chan is standard
+                                    event_chan = 256
+                                    event_pitch = midi_note
+                                elif seq_mode == 'MIDI':
+                                    # MIDI mode: pitch is MIDI note, chan is MIDI channel
+                                    event_chan = mode_target  # MIDI channel (0-15)
+                                    event_pitch = midi_note
                                 
                                 # Extract note events
                                 for note_event in notes_elem:
@@ -1303,10 +1377,10 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                     # Store event data
                                     sublayer_events.append({
                                         'step': step,
-                                        'chan': str(chan_value),  # Pads mode: chan = 256 + pad_number
+                                        'chan': str(event_chan),
                                         'type': 'note',
                                         'strtks': strtks,
-                                        'pitch': 0,  # Pads mode: pitch is always 0
+                                        'pitch': event_pitch,
                                         'lencount': lencount,
                                         'lentks': lentks,
                                         'velocity': vel_val
@@ -1440,17 +1514,32 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             
             # Add params with calculated step_len and step_count
             params = ET.SubElement(cell, 'params')
+            
+            # Set parameters based on sequence mode
+            if seq_mode == 'Pads':
+                seqstepmode_val = '1'  # Pads mode
+                seqpadmapdest_val = str(pad_num)  # Sequence location
+                midioutchan_val = '0'
+            elif seq_mode == 'Keys':
+                seqstepmode_val = '0'  # Keys mode
+                seqpadmapdest_val = str(target_pad)  # Target pad to play
+                midioutchan_val = '0'
+            elif seq_mode == 'MIDI':
+                seqstepmode_val = '0'  # MIDI mode
+                seqpadmapdest_val = '0'
+                midioutchan_val = str(mode_target)  # MIDI channel (0-15)
+            
             params.attrib = {
                 'notesteplen': str(step_len),  # Calculated based on clip length
                 'notestepcount': str(step_count),  # Calculated from clip length
                 'dutycyc': '1000',
                 'quantsizeseq': '1',
                 'dispmode': '1' if sublayer_idx == 0 else '0',  # Only first layer visible by default
-                'seqpadmapdest': str(pad_num),  # Pad number where this sequence is located (for pads mode)
+                'seqpadmapdest': seqpadmapdest_val,
                 'seqplayenable': '1' if sublayer_events else '0',  # Enable if has notes
                 'activeseqlayer': str(first_layer_with_notes if first_layer_with_notes >= 0 else 0),
-                'midioutchan': '0',
-                'seqstepmode': '1',  # 1 = Pad mode (0 would be keys mode)
+                'midioutchan': midioutchan_val,
+                'seqstepmode': seqstepmode_val,
                 'midiseqcellchan': '0'
             }
             
