@@ -612,11 +612,12 @@ def detect_warped_stem(device):
                 
                 if warp_mode and 'Value' in warp_mode.attrib:
                     warp_mode_val = int(warp_mode.attrib['Value'])
-                    logger.debug(f'  detect_warped_stem: WarpMode value = {warp_mode_val}')
+                    logger.info(f'  detect_warped_stem: WarpMode = {warp_mode_val}')
                 
                 if is_warped_elem and 'Value' in is_warped_elem.attrib:
-                    is_warped_val = is_warped_elem.attrib['Value'].lower() == 'true'
-                    logger.debug(f'  detect_warped_stem: IsWarped value = {is_warped_val}')
+                    is_warped_str = is_warped_elem.attrib['Value']
+                    is_warped_val = is_warped_str.lower() == 'true'
+                    logger.info(f'  detect_warped_stem: IsWarped = "{is_warped_str}" → {is_warped_val}')
                 
                 # Try to extract loop length from LoopLength element
                 # First check in SampleWarpProperties
@@ -661,7 +662,9 @@ def detect_warped_stem(device):
                 # Sample is warped if WarpMode > 0 OR IsWarped = true
                 if warp_mode_val > 0 or is_warped_val:
                     result['is_warped'] = True
-                    logger.debug(f'  detect_warped_stem: Sample is warped (mode={warp_mode_val})')
+                    logger.info(f'  ✓ Sample IS WARPED (WarpMode={warp_mode_val}, IsWarped={is_warped_val})')
+                else:
+                    logger.info(f'  ✗ Sample NOT warped (WarpMode={warp_mode_val}, IsWarped={is_warped_val})')
             else:
                 logger.debug('  detect_warped_stem: No SampleWarpProperties found')
         
