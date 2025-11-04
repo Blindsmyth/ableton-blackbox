@@ -454,11 +454,20 @@ def drum_rack_extract(drum_rack_device):
         for branch_index in range(min(len(branches), 16)):
             branch = branches[branch_index]
             
+            # Extract branch Id attribute (used for Keys mode routing)
+            branch_id = branch.attrib.get('Id', None)
+            if branch_id:
+                try:
+                    branch_id = int(branch_id)
+                except ValueError:
+                    branch_id = None
+            
             pad_info = {
-                'blackbox_pad': branch_index,  # Use chain index as pad index by default
+                'blackbox_pad': branch_index,  # Use chain index as pad index by default (0-15)
                 'simpler': None,
                 'midi_note': None,
                 'choke_group': 0,
+                'branch_id': branch_id,  # Store branch Id for Keys mode pad mapping
                 'name': '',
                 'is_empty': True
             }
