@@ -214,10 +214,10 @@ def detect_sequence_mode(midi_track):
     Returns:
         tuple: (mode, target)
         - mode: 'Keys', 'MIDI', or 'Pads'
-        - target: For Keys mode: chain index (int), For MIDI mode: channel (int), For Pads mode: None
+        - target: For Keys mode: branch_id (int), For MIDI mode: channel (int), For Pads mode: None
     
     Routing patterns:
-        - Keys Mode: MidiOut/Track.XX/DeviceIn.Y.Z (routed to specific drum rack pad)
+        - Keys Mode: MidiOut/Track.XX/DeviceIn.Y.BZ (routed to specific drum rack pad via Branch Id Z)
         - MIDI Mode: MidiOut/External.Dev:DeviceName/Channel (routed to external MIDI)
         - Pads Mode: MidiOut/Track.XX/TrackIn or MidiOut/None (routed to entire drum rack)
     """
@@ -236,13 +236,38 @@ def detect_sequence_mode(midi_track):
         target = target_elem.attrib['Value']
         logger.debug(f'  Routing target: {target}')
         
-        # Check for Keys mode: MidiOut/Track.XX/DeviceIn.Y.Z
+        # Check for Keys mode: MidiOut/Track.XX/DeviceIn.Y.BZ,W.V
+        # Example: MidiOut/Track.34/DeviceIn.0.B40,0.0
+        # The BZ part (e.g., B40) is the Branch Id that maps to a specific pad
         if '/DeviceIn.' in target:
-            # Extract chain index from DeviceIn.Y.Z format
+            # Extract the DeviceIn part
             device_part = target.split('/DeviceIn.')[-1]
-            chain_index = int(device_part.split('.')[0])
-            logger.info(f'  Detected Keys mode → Pad {chain_index}')
-            return 'Keys', chain_index
+            
+            # Parse format: 0.B40,0.0
+            # Split by periods
+            parts = device_part.split('.')
+            if len(parts) >= 2:
+                second_part = parts[1]
+                
+                # Check if second part contains 'B' followed by a number (Branch Id)
+                if 'B' in second_part:
+                    branch_part = second_part.split(',')[0]  # Get part before comma
+                    if branch_part.startswith('B'):
+                        try:
+                            branch_id = int(branch_part[1:])  # Remove 'B' prefix and convert to int
+                            logger.info(f'  Detected Keys mode → Branch Id {branch_id}')
+                            return 'Keys', branch_id
+                        except ValueError:
+                            logger.warning(f'  Could not parse branch id from: {branch_part}')
+            
+            # Fallback: use chain index
+            try:
+                chain_index = int(device_part.split('.')[0])
+                logger.info(f'  Detected Keys mode → Chain index {chain_index} (fallback)')
+                return 'Keys', chain_index
+            except ValueError:
+                logger.warning(f'  Could not parse chain index from: {device_part}')
+                return 'Pads', None
         
         # Check for MIDI mode: MidiOut/External.Dev:
         if '/External.Dev:' in target or '/External/' in target:
@@ -412,7 +437,7 @@ def safe_navigate(element, path_description, *indices_or_tags):
 def drum_rack_extract(drum_rack_device):
     """
     Extract all Simplers from a DrumGroupDevice.
-    Returns a list of pad info: [{'blackbox_pad': 0-15, 'simpler': device, 'midi_note': 36-51, 'choke_group': 0-16, 'name': '...'}, ...]
+    Returns a list of pad info: [{'blackbox_pad': 0-15, 'simpler': device, 'midi_note': 36-51, 'choke_group': 0-16, 'branch_id': X, 'name': '...'}, ...]
     """
     pad_list = []
     
@@ -1315,34 +1340,28 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
         pad_num = track_idx  # Direct mapping: MIDI track 1 -> Pad 0, etc.
         row, column = row_column(pad_num)
         
-        # For Keys mode, try to determine target pad from MIDI notes instead of chain index
-        # This handles cases where drum racks have custom MIDI note mappings
+        # For Keys mode, determine target pad from branch Id
         target_pad = pad_num  # Default
-        if seq_mode == 'Keys':
-            # Extract first MIDI note from this track's clips
-            first_midi_note = extract_first_midi_note_from_track(track)
-            if first_midi_note is not None:
-                logger.debug(f'  Keys mode: First MIDI note is {first_midi_note}')
-                # Try to find which pad responds to this MIDI note
-                target_found = False
-                for pad in pad_list:
-                    if pad.get('midi_note') == first_midi_note:
-                        target_pad = pad['blackbox_pad']
-                        target_found = True
-                        logger.info(f'  Keys mode: MIDI note {first_midi_note} maps to Pad {target_pad}')
-                        break
-                
-                if not target_found:
-                    # MIDI note not found in drum rack, fall back to chain index or track index
-                    logger.warning(f'  Keys mode: MIDI note {first_midi_note} not found in drum rack pads')
-                    logger.warning(f'  Using track position as target (Pad {pad_num})')
-                    target_pad = pad_num
-            else:
-                # No MIDI notes found, use chain index from routing
-                target_pad = mode_target if mode_target is not None else pad_num
-                logger.debug(f'  Keys mode: No MIDI notes found, using chain index {target_pad}')
+        if seq_mode == 'Keys' and mode_target is not None:
+            # mode_target is the branch_id from the routing
+            branch_id = mode_target
+            
+            # Find which pad has this branch_id
+            target_found = False
+            for pad in pad_list:
+                if pad.get('branch_id') == branch_id:
+                    target_pad = pad['blackbox_pad']
+                    target_found = True
+                    logger.info(f'  Keys mode: Branch Id {branch_id} maps to Pad {target_pad}')
+                    break
+            
+            if not target_found:
+                # Branch Id not found, fall back to track position
+                logger.warning(f'  Keys mode: Branch Id {branch_id} not found in drum rack')
+                logger.warning(f'  Falling back to track position (Pad {pad_num})')
+                target_pad = pad_num
         
-        logger.info(f'Track {track_idx}: Mode={seq_mode}, MIDI routing target={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
+        logger.info(f'Track {track_idx}: Mode={seq_mode}, Branch/Channel={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
         
         # Extract up to 4 MIDI clips as sub-layers
         sub_layers = []
