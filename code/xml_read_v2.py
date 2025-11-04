@@ -1369,10 +1369,15 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         vel_val = int(float(velocity.attrib.get('Value', 100)))
                                     
                                     # Calculate timing (always use tick-based format for firmware 2.3+)
+                                    # Note: For unquantised mode, use 960 ticks per beat (1/4 of normal)
                                     step = int(time_val * 4)  # 4 steps per beat
-                                    strtks = int(time_val * 3840)  # 1 beat = 3840 ticks
+                                    if unquantised:
+                                        strtks = int(time_val * 960)  # Unquantised: 960 ticks per beat
+                                        lentks = int(dur_val * 960)
+                                    else:
+                                        strtks = int(time_val * 3840)  # Quantised: 3840 ticks per beat
+                                        lentks = int(dur_val * 3840)
                                     lencount = max(1, int(dur_val * 4))
-                                    lentks = int(dur_val * 3840)
                                     
                                     # Store event data
                                     sublayer_events.append({
