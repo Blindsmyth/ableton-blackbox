@@ -2,10 +2,11 @@
 
 ## Current Testing: An mir Vorbei test unquantised
 
-### Summary of Fixes
-- ✅ **Issue #3 FIXED**: Unquantised timing now correct (960 ticks/beat)
+### Summary of All Fixes
+- ✅ **Issue #1 FIXED**: Keys mode now correctly maps via Branch Id
 - ✅ **Issue #2 FIXED**: Pad 8 now in sampler mode (not clip mode)
-- ⚠️ **Issue #1 PARTIAL**: Keys mode detection improved but needs more work
+- ✅ **Issue #3 FIXED**: Timing now correct for all sequence modes
+- ✅ **Issue #4 FIXED**: Tick rate based on sequence mode (Pads vs Keys/MIDI)
 
 ---
 
