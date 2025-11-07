@@ -1502,14 +1502,14 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         vel_val = int(float(velocity.attrib.get('Value', 100)))
                                     
                                     # Calculate timing (always use tick-based format for firmware 2.3+)
-                                    # All modes use 3840 ticks/beat for consistency
-                                    # Unquantised vs quantized is determined by lencount value (0 = unquantised)
+                                    # We'll detect unquantised later and recalculate if needed
+                                    # Default: use 3840 ticks/beat (quantised)
                                     step = int(time_val * 4)  # 4 steps per beat (16th notes)
                                     strtks = int(time_val * 3840)  # 1 beat = 3840 ticks (960 per 16th note)
                                     lentks = int(dur_val * 3840)
                                     lencount = max(1, int(dur_val * 4))  # Will be set to 0 for unquantised
                                     
-                                    # Store event data
+                                    # Store event data (tick rate will be adjusted if unquantised)
                                     sublayer_events.append({
                                         'step': step,
                                         'chan': str(event_chan),
@@ -1518,7 +1518,9 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         'pitch': event_pitch,
                                         'lencount': lencount,
                                         'lentks': lentks,
-                                        'velocity': vel_val
+                                        'velocity': vel_val,
+                                        'time_val': time_val,  # Store original time for recalculation
+                                        'dur_val': dur_val     # Store original duration for recalculation
                                     })
             
             # Extract clip length from MIDI clip to calculate step_count
@@ -1638,13 +1640,21 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             total_notes_all_layers += len(sublayer_events)
             
             # Detect if notes are unquantised (auto-detection)
+            # Check with 3840 ticks/beat grid (240 ticks = 1/16 note)
             is_unquantised = detect_unquantised_notes(sublayer_events, grid_resolution=240)
             
-            # For unquantised notes, set lencount=0 to use precise lentks timing
+            # For unquantised notes, recalculate timing with 960 ticks/beat (finer resolution)
             if is_unquantised:
-                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: Unquantised detected → setting lencount=0')
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: Unquantised detected → using 960 ticks/beat, setting lencount=0')
                 for event in sublayer_events:
-                    event['lencount'] = 0
+                    # Recalculate with 960 ticks/beat (1/4 of 3840)
+                    time_val = event.get('time_val', 0)
+                    dur_val = event.get('dur_val', 0)
+                    event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised
+                    event['lentks'] = int(dur_val * 960)
+                    event['lencount'] = 0  # Use precise lentks timing
+                    # Recalculate step for display (still based on 16th notes)
+                    event['step'] = int(time_val * 4)
             
             # Create cell element for this sublayer
             cell = ET.SubElement(session, 'cell')
