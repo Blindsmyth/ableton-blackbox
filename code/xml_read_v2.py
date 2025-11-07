@@ -1306,21 +1306,50 @@ def make_drum_rack_pads(session, pad_list, tempo):
     return session, assets
 
 
+def detect_unquantised_notes(events, grid_resolution=240):
+    """
+    Detect if MIDI notes are quantized to a grid or have free timing.
+    
+    Args:
+        events: List of note events with 'strtks' values
+        grid_resolution: Minimum grid resolution in ticks (240 = 1/16 note at 3840 ticks/beat)
+    
+    Returns:
+        bool: True if notes are unquantised (off-grid), False if quantized
+    """
+    if not events:
+        return False
+    
+    # Check if any note starts are off-grid (not aligned to grid_resolution)
+    off_grid_count = 0
+    for event in events:
+        strtks = event.get('strtks', 0)
+        # Check if strtks is aligned to the grid
+        if strtks % grid_resolution != 0:
+            off_grid_count += 1
+    
+    # If more than 20% of notes are off-grid, consider it unquantised
+    unquantised = off_grid_count > len(events) * 0.2
+    
+    if unquantised:
+        logger.debug(f'  Detected unquantised: {off_grid_count}/{len(events)} notes off-grid')
+    
+    return unquantised
+
+
 def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
     """
     Create Blackbox sequences from MIDI tracks using firmware 2.3+ format.
     Each MIDI track can have up to 4 clips mapped to sub-layers A/B/C/D.
     Each sublayer is created as a separate cell element with type="noteseq".
     
-    Timing:
-    - Pads mode sequences: 3840 ticks/beat (quantised to grid)
-    - Keys/MIDI mode sequences: 960 ticks/beat (precise timing)
+    Timing: All sequences use 3840 ticks/beat. Unquantised detection is automatic.
     
     Args:
         session: The Blackbox session element
         midi_tracks: List of MIDI track elements
         pad_list: List of pad info dictionaries
-        unquantised: Legacy parameter, now ignored (timing determined by sequence mode)
+        unquantised: Legacy parameter, now ignored (automatic detection used)
     """
     logger.info(f'Processing {len(midi_tracks)} MIDI tracks for sequences (firmware 2.3+ format)...')
     
@@ -1473,18 +1502,12 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         vel_val = int(float(velocity.attrib.get('Value', 100)))
                                     
                                     # Calculate timing (always use tick-based format for firmware 2.3+)
-                                    # Tick rate depends on sequence mode:
-                                    # - Pads mode: 3840 ticks/beat (quantised to grid)
-                                    # - Keys/MIDI mode: 960 ticks/beat (precise timing for melodic sequences)
-                                    step = int(time_val * 4)  # 4 steps per beat
-                                    if seq_mode == 'Pads':
-                                        strtks = int(time_val * 3840)  # Pads: Standard tick rate
-                                        lentks = int(dur_val * 3840)
-                                    else:
-                                        # Keys or MIDI mode: use precise timing
-                                        strtks = int(time_val * 960)  # Keys/MIDI: Precise tick rate
-                                        lentks = int(dur_val * 960)
-                                    lencount = max(1, int(dur_val * 4))
+                                    # All modes use 3840 ticks/beat for consistency
+                                    # Unquantised vs quantized is determined by lencount value (0 = unquantised)
+                                    step = int(time_val * 4)  # 4 steps per beat (16th notes)
+                                    strtks = int(time_val * 3840)  # 1 beat = 3840 ticks (960 per 16th note)
+                                    lentks = int(dur_val * 3840)
+                                    lencount = max(1, int(dur_val * 4))  # Will be set to 0 for unquantised
                                     
                                     # Store event data
                                     sublayer_events.append({
@@ -1613,6 +1636,15 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                 first_layer_with_notes = sublayer_idx
             
             total_notes_all_layers += len(sublayer_events)
+            
+            # Detect if notes are unquantised (auto-detection)
+            is_unquantised = detect_unquantised_notes(sublayer_events, grid_resolution=240)
+            
+            # For unquantised notes, set lencount=0 to use precise lentks timing
+            if is_unquantised:
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: Unquantised detected → setting lencount=0')
+                for event in sublayer_events:
+                    event['lencount'] = 0
             
             # Create cell element for this sublayer
             cell = ET.SubElement(session, 'cell')
