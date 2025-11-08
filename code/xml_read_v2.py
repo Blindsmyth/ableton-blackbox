@@ -581,13 +581,8 @@ def detect_warped_stem(device):
                     result['trigger_mode'] = 'toggle'
         
             # Check for warp properties in the sample
-            player = safe_navigate(device, "Player", 19)
-            if not player:
-                player = find_element_by_tag(device, 'Player')
-            if not player:
-                logger.debug('  detect_warped_stem: No Player found')
-                return result
-            
+            # Use the player variable already found above (line 571)
+            # No need to re-fetch it with safe_navigate
             multi_sample_map = find_element_by_tag(player, 'MultiSampleMap')
             if not multi_sample_map:
                 logger.debug('  detect_warped_stem: No MultiSampleMap found')
@@ -605,22 +600,33 @@ def detect_warped_stem(device):
             warp_props = find_element_by_tag(part, 'SampleWarpProperties')
             if warp_props:
                 logger.debug('  detect_warped_stem: Found SampleWarpProperties!')
+                logger.debug(f'  detect_warped_stem: SampleWarpProperties children: {[c.tag for c in warp_props]}')
                 
                 # Check both WarpMode and IsWarped flag
                 warp_mode = find_element_by_tag(warp_props, 'WarpMode')
                 is_warped_elem = find_element_by_tag(warp_props, 'IsWarped')
+                logger.debug(f'  detect_warped_stem: IsWarped element found: {is_warped_elem is not None}')
                 
                 warp_mode_val = 0
                 is_warped_val = False
                 
-                if warp_mode and 'Value' in warp_mode.attrib:
+                # CRITICAL FIX: ElementTree elements with no children/text are falsy even if they exist
+                # Must check "is not None" instead of truthiness
+                if warp_mode is not None and 'Value' in warp_mode.attrib:
                     warp_mode_val = int(warp_mode.attrib['Value'])
                     logger.info(f'  detect_warped_stem: WarpMode = {warp_mode_val}')
                 
-                if is_warped_elem and 'Value' in is_warped_elem.attrib:
+                # CRITICAL FIX: ElementTree elements with no children/text are falsy even if they exist
+                # Must check "is not None" instead of truthiness
+                if is_warped_elem is not None and 'Value' in is_warped_elem.attrib:
                     is_warped_str = is_warped_elem.attrib['Value']
                     is_warped_val = is_warped_str.lower() == 'true'
-                    logger.info(f'  detect_warped_stem: IsWarped = "{is_warped_str}" → {is_warped_val}')
+                    logger.info(f'  detect_warped_stem: IsWarped element found: attrib={is_warped_elem.attrib}, Value="{is_warped_str}", lower="{is_warped_str.lower()}", bool={is_warped_val}')
+                else:
+                    if is_warped_elem is not None:
+                        logger.warning(f'  detect_warped_stem: IsWarped element found but no Value attribute: {is_warped_elem.attrib}')
+                    else:
+                        logger.debug(f'  detect_warped_stem: IsWarped element not found')
                 
                 # Try to extract loop length from LoopLength element
                 # First check in SampleWarpProperties
@@ -1186,21 +1192,15 @@ def make_drum_rack_pads(session, pad_list, tempo):
                     # Sample has beat count (either from warp or calculated)
                     beatcount = str(beat_count)
                     
-                    # Only use clip mode if sample is explicitly warped
-                    # Unwarped samples stay in sampler mode regardless of length
-                    if warp_info.get('is_warped', False) and beat_count >= 8:
-                        cellmode = '1'  # Clip mode for warped longer samples
+                    # Use clip mode if sample is warped (regardless of beat_count)
+                    if warp_info.get('is_warped', False):
+                        cellmode = '1'  # Clip mode for warped samples
                         loopmode = '1'  # Loop enabled
                         logger.info(f'    → Warped sample: {beat_count} beats ({beat_count/4} bars), clip mode enabled')
                     else:
-                        # Unwarped or short sample - sampler mode
-                        if warp_info.get('is_warped', False):
-                            loopmode = '1'  # Loop enabled for warped samples
-                            logger.info(f'    → Warped sample: {beat_count} beats ({beat_count/4} bars), sampler mode with loop')
-                        else:
-                            # Unwarped sample - don't enable loop by default
-                            loopmode = '0'
-                            logger.info(f'    → Unwarped sample: {beat_count} beats ({beat_count/4} bars), sampler mode (no auto-loop)')
+                        # Unwarped sample - sampler mode
+                        loopmode = '0'  # Don't enable loop by default for unwarped samples
+                        logger.info(f'    → Unwarped sample: {beat_count} beats ({beat_count/4} bars), sampler mode (no auto-loop)')
                 else:
                     # No warp beat info - check if loop is manually enabled
                     loop_on = params.get('loop_on', '0') == '1' or params.get('loop_on', '0') == 'true'
