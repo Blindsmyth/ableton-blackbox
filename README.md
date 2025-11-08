@@ -112,7 +112,7 @@ Your Ableton project should be set up as follows:
 - Chain 2 → Blackbox Pad 2
 - ... and so on
 
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for details and workarounds.
+See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflows.
 
 ## Blackbox Pad Layout
 
@@ -146,16 +146,17 @@ Row 3 (bottom): 12  13  14  15
 
 ## Documentation
 
+- **[WORKFLOWS.md](WORKFLOWS.md)** - Complete workflows guide (start here!)
 - **[QUICKSTART.md](QUICKSTART.md)** - Step-by-step guide for first-time users
-- **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Known limitations and workarounds
-- **[DRUM_RACK_WORKFLOW.md](DRUM_RACK_WORKFLOW.md)** - Best practices for setting up projects
-- **[CODEBASE_STATUS.md](CODEBASE_STATUS.md)** - Development history and code structure
+- **[DRUM_RACK_WORKFLOW.md](DRUM_RACK_WORKFLOW.md)** - Detailed Drum Rack workflow
+- **[docs/SEQUENCE_TIMING_WORKFLOW.md](docs/SEQUENCE_TIMING_WORKFLOW.md)** - Detailed timing and quantization rules
+- **[docs/BLACKBOX_TECHNICAL_REFERENCE.md](docs/BLACKBOX_TECHNICAL_REFERENCE.md)** - Blackbox XML structure reference
 
 ## Contributing
 
 This is an active project! If you find bugs or have feature requests:
 
-1. Check [KNOWN_ISSUES.md](KNOWN_ISSUES.md) first
+1. Check [WORKFLOWS.md](WORKFLOWS.md) troubleshooting section first
 2. Open an issue on GitHub with:
    - Ableton Live version
    - Blackbox firmware version
