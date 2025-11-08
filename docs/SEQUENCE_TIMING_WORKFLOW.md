@@ -14,7 +14,7 @@ Only use `step_len=14` (1/32 notes = 8 steps per beat) if:
 - Notes fall on 32nd note positions that are **NOT** also 16th note positions
 - Examples of positions that require 1/32:
   - 0.125 beats (between 16th notes)
-  - 0.375 beats
+  - 0.375 beatsa
   - 0.625 beats
   - 0.875 beats
 - Notes at 0.0, 0.25, 0.5, 0.75 beats align to both grids → use 1/16

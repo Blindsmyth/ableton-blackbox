@@ -1741,6 +1741,20 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             # CRITICAL: Must create a new list for each sublayer to avoid reference issues
             sublayer_events = []
             
+            # CRITICAL: Extract LoopStart offset BEFORE processing notes
+            # Note times in Ableton are relative to the clip start (LoopStart)
+            # We need to subtract this offset to get times relative to sequence start
+            loop_start_offset = 0.0
+            if midi_clip:
+                loop_start_elem = find_element_by_tag(midi_clip, 'LoopStart')
+                if loop_start_elem is not None and 'Value' in loop_start_elem.attrib:
+                    try:
+                        loop_start_offset = float(loop_start_elem.attrib['Value'])
+                        if sublayer_idx == 0:  # Only log for first sublayer
+                            logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: LoopStart = {loop_start_offset} beats (will subtract from note times)')
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Error extracting LoopStart: {e}')
+            
             if midi_clip:
                 notes = find_element_by_tag(midi_clip, 'Notes')
                 if notes:
@@ -1781,7 +1795,7 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                                 for note_event in notes_elem:
                                     # Handle both Ableton 12.3+ (attributes) and older (elements) formats
                                     if 'Time' in note_event.attrib:
-                                        time_val = float(note_event.attrib.get('Time', 0))
+                                        time_val_raw = float(note_event.attrib.get('Time', 0))
                                         dur_val = float(note_event.attrib.get('Duration', 0))
                                         vel_val = int(float(note_event.attrib.get('Velocity', 100)))
                                     else:
@@ -1792,9 +1806,22 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                                         if not (time and duration and velocity):
                                             continue
                                             
-                                        time_val = float(time.attrib.get('Value', 0))
+                                        time_val_raw = float(time.attrib.get('Value', 0))
                                         dur_val = float(duration.attrib.get('Value', 0))
                                         vel_val = int(float(velocity.attrib.get('Value', 100)))
+                                    
+                                    # CRITICAL: Subtract LoopStart offset from note times
+                                    # Note times in Ableton are relative to the clip start (LoopStart)
+                                    # We need to subtract this offset to get times relative to sequence start
+                                    time_val = time_val_raw - loop_start_offset
+                                    # Ensure time_val is not negative (shouldn't happen, but safety check)
+                                    if time_val < 0:
+                                        logger.warning(f'    Note time {time_val_raw} - LoopStart {loop_start_offset} = {time_val} (negative, clamping to 0)')
+                                        time_val = 0
+                                    
+                                    # DEBUG: Log raw time values for sequence 5 (Track 4) to diagnose timing issue
+                                    if track_idx == 4 and sublayer_idx == 0 and len(sublayer_events) < 5:
+                                        logger.info(f'    DEBUG Track 4: time_val_raw={time_val_raw}, loop_start_offset={loop_start_offset}, time_val={time_val}')
                                     
                                     # Calculate timing (always use tick-based format for firmware 2.3+)
                                     # We'll detect unquantised later and recalculate if needed
@@ -1815,7 +1842,7 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                                         'lencount': lencount,
                                         'lentks': lentks,
                                         'velocity': vel_val,
-                                        'time_val': time_val,  # Store original time for recalculation
+                                        'time_val': time_val,  # Store adjusted time (after subtracting LoopStart)
                                         'dur_val': dur_val     # Store original duration for recalculation
                                     }
                                     sublayer_events.append(event_dict)
@@ -1884,11 +1911,15 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             if sublayer_events:
                 # Debug: Log first few note times for verification
                 if sublayer_idx == 0:  # Only for first sublayer
-                    first_times = [event.get('time_val', 0) for event in sublayer_events[:3]]
-                    logger.info(f'    Track {track_idx}, Sub-layer {chr(65+sublayer_idx)}: First note times (beats): {[f"{t:.6f}" for t in first_times]}')
+                    first_times = [event.get('time_val', 0) for event in sublayer_events[:5]]
+                    logger.info(f'    Track {track_idx}, Sub-layer {chr(65+sublayer_idx)}: All note times (beats): {[f"{t:.6f}" for t in first_times]}')
             grid_analysis = detect_note_grid_pattern(sublayer_events, ticks_per_beat=3840)
             is_unquantised = grid_analysis['is_unquantised']
             detected_step_len = grid_analysis['step_len']
+            
+            # DEBUG: Log detection result for all tracks to diagnose quantisation detection
+            if sublayer_idx == 0:  # Only for first sublayer
+                logger.info(f'    Track {track_idx}, Sub-layer {chr(65+sublayer_idx)}: Detection result - is_unquantised={is_unquantised}, detected_step_len={detected_step_len}, seq_mode={seq_mode}')
             
             # Calculate step_len and step_count from clip length
             # Step length values:
@@ -1980,9 +2011,10 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             }
             steps_per_beat = steps_per_beat_map.get(step_len, 4)
             
-            # CRITICAL: Tick rate depends on both sequence mode AND quantisation
+            # CRITICAL: Tick rate depends ONLY on quantisation state, NOT on sequence mode
             # Quantised sequences (both Keys and Pads): Use 3840 ticks/beat
             # Unquantised sequences (both Keys and Pads): Use 960 ticks/beat
+            # Quantisation detection is independent of Keys/Pads mode
             if is_unquantised:
                 # Unquantised: use 960 ticks/beat for strtks, constant lentks=240, lencount=0
                 # Both Keys and Pads modes use identical timing parameters
