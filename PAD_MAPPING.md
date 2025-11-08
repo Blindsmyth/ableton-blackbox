@@ -120,18 +120,27 @@ def make_pads(from_ableton, clips, tempo):
 ## Important Details
 
 ### Pad Numbering
-The internal pad numbering (0-15) maps to physical Blackbox layout like this:
 
-```python
-row_column(pad):
-    # Internal pad → [row, col] → Blackbox pad (1-indexed)
-    0:[3,0]   1:[3,1]   2:[3,2]   3:[3,3]   # Row 3 (bottom) → Pads 1-4
-    4:[2,0]   5:[2,1]   6:[2,2]   7:[2,3]   # Row 2 → Pads 5-8
-    8:[1,0]   9:[1,1]  10:[1,2]  11:[1,3]   # Row 1 → Pads 9-12
-   12:[0,0]  13:[0,1]  14:[0,2]  15:[0,3]   # Row 0 (top) → Pads 13-16
-```
+The code uses 0-15 internally, but Blackbox displays pads as 1-16. Here's how they map:
 
-**Note**: Row 3 is the bottom row (pads 1-4), Row 0 is the top row (pads 13-16).
+| Internal (Code) | Blackbox Display | Position |
+|----------------|------------------|----------|
+| Pad 0 | Pad 1 | Bottom-left (row 3, col 0) |
+| Pad 1 | Pad 2 | Bottom row, 2nd from left |
+| Pad 2 | Pad 3 | Bottom row, 3rd from left |
+| Pad 3 | Pad 4 | Bottom-right (row 3, col 3) |
+| Pad 4 | Pad 5 | 2nd row from bottom, left |
+| Pad 5 | Pad 6 | 2nd row from bottom, 2nd |
+| ... | ... | ... |
+| Pad 15 | Pad 16 | Top-right (row 0, col 3) |
+
+**Simple rule**: Blackbox pad number = Internal pad number + 1
+
+**Row mapping**:
+- Row 3 (bottom) = Pads 1-4 (internal 0-3)
+- Row 2 = Pads 5-8 (internal 4-7)
+- Row 1 = Pads 9-12 (internal 8-11)
+- Row 0 (top) = Pads 13-16 (internal 12-15)
 
 ### Track Filtering
 Only certain Ableton track types are extracted:
