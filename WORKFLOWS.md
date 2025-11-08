@@ -168,7 +168,7 @@ Row 3 (bottom):  1   2   3   4
 ### Sequence Location
 
 Sequences are placed at pads matching their MIDI track index:
-- **Track 2** (first MIDI track) → Sequence at **Pad 0**
+- **Track 2** (first MIDI track) → Sequence at **Pad 1** (bottom-left)
 - **Track 3** → Sequence at **Pad 1**
 - **Track 4** → Sequence at **Pad 2**
 - ... and so on
