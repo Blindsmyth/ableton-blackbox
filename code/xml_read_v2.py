@@ -1482,15 +1482,17 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
             aligns_to_triplet = False
             aligns_to_straight = False
             
-            # Check if aligns to any triplet grid
+            # Check if aligns to any triplet grid (with tolerance for rounding)
             for grid_ticks, step_len, name in triplet_grids:
-                if tick_pos % grid_ticks == 0:
+                remainder = tick_pos % grid_ticks
+                if remainder == 0 or remainder == (grid_ticks - 1) or remainder == 1:
                     aligns_to_triplet = True
                     break
             
-            # Check if aligns to any straight grid
+            # Check if aligns to any straight grid (with tolerance for rounding)
             for grid_ticks, step_len, name in straight_grids:
-                if tick_pos % grid_ticks == 0:
+                remainder = tick_pos % grid_ticks
+                if remainder == 0 or remainder == (grid_ticks - 1) or remainder == 1:
                     aligns_to_straight = True
                     break
             
