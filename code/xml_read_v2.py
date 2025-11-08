@@ -1784,9 +1784,12 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                                     event_chan = 256 + pad_number
                                     event_pitch = 0
                                 elif seq_mode == 'Keys':
-                                    # Keys mode when routed to pad: use chan=256+target_pad, pitch=MIDI note (matches reference)
-                                    # This is a special case where seqstepmode="1" but behaves like Keys mode
-                                    event_chan = 256 + target_pad
+                                    # Keys mode: chan depends on quantisation state
+                                    # - Quantised: chan=256+target_pad (seqstepmode="1")
+                                    # - Unquantised: chan=256 (seqstepmode="0")
+                                    # We'll determine this when we know is_unquantised, but for now use target_pad
+                                    # This will be overridden below based on is_unquantised
+                                    event_chan = 256 + target_pad  # Default, will be updated if unquantised
                                     event_pitch = midi_note
                                 elif seq_mode == 'MIDI':
                                     # MIDI mode: pitch is MIDI note, chan is MIDI channel
@@ -2020,6 +2023,7 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             if is_unquantised:
                 # Unquantised: use 960 ticks/beat for strtks, constant lentks=240, lencount=0
                 # Both Keys and Pads modes use identical timing parameters
+                # CRITICAL: For unquantised Keys mode, chan should be 256 (not 256+target_pad)
                 logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {seq_mode} mode, unquantised → using 960 ticks/beat, setting lencount=0')
                 for event in sublayer_events:
                     time_val = event.get('time_val', 0)
@@ -2029,6 +2033,14 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                     event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
                     # Recalculate step for display based on step_len
                     event['step'] = int(time_val * steps_per_beat)
+                    # For unquantised Keys mode, chan should be 256 (not 256+target_pad)
+                    if seq_mode == 'Keys':
+                        current_chan = event.get('chan', 256)
+                        # Convert to int if it's a string, then check if it's >= 256
+                        chan_int = int(current_chan) if isinstance(current_chan, str) else current_chan
+                        if chan_int >= 256:
+                            # Update chan to 256 for unquantised Keys mode
+                            event['chan'] = 256
                 # Debug: verify lencount was set correctly
                 if sublayer_events:
                     sample_lencount = sublayer_events[0].get('lencount')
@@ -2065,15 +2077,25 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             params = ET.SubElement(cell, 'params')
             
             # Set parameters based on sequence mode
+            # CRITICAL: For Keys mode, seqstepmode depends on quantisation state
+            # - Quantised Keys mode: seqstepmode="1" with chan=256+target_pad (matches sequence 5 reference)
+            # - Unquantised Keys mode: seqstepmode="0" with chan=256 (matches sequence 8 reference)
             if seq_mode == 'Pads':
                 seqstepmode_val = '1'  # Pads mode
                 seqpadmapdest_val = str(sequence_location_pad)  # Sequence location (where the cell is placed)
                 midioutchan_val = '0'
             elif seq_mode == 'Keys':
-                # When routed to a pad, use seqstepmode="1" with chan=256+target_pad and pitch=MIDI note (matches reference)
-                seqstepmode_val = '1'  # Pads mode format but Keys mode behavior
-                seqpadmapdest_val = str(target_pad)  # Target pad to play
-                midioutchan_val = '0'
+                # Check if this sublayer is unquantised
+                if is_unquantised:
+                    # Unquantised Keys mode: use seqstepmode="0" with chan=256 (matches reference)
+                    seqstepmode_val = '0'  # Keys mode
+                    seqpadmapdest_val = str(target_pad)  # Target pad to play
+                    midioutchan_val = '0'
+                else:
+                    # Quantised Keys mode: use seqstepmode="1" with chan=256+target_pad (matches reference)
+                    seqstepmode_val = '1'  # Pads mode format but Keys mode behavior
+                    seqpadmapdest_val = str(target_pad)  # Target pad to play
+                    midioutchan_val = '0'
             elif seq_mode == 'MIDI':
                 seqstepmode_val = '0'  # MIDI mode
                 seqpadmapdest_val = '0'
