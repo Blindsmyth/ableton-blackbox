@@ -1980,11 +1980,29 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             }
             steps_per_beat = steps_per_beat_map.get(step_len, 4)
             
-            # For unquantised notes, recalculate timing with 960 ticks/beat (finer resolution)
-            if is_unquantised:
-                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: Unquantised detected → using 960 ticks/beat, setting lencount=0')
+            # CRITICAL: Tick rate depends on sequence mode, not just quantisation
+            # Keys/MIDI mode: Always use 960 ticks/beat (precise timing)
+            # Pads mode: Use 3840 ticks/beat for quantised, 960 ticks/beat for unquantised
+            if seq_mode in ['Keys', 'MIDI']:
+                # Keys/MIDI mode: Always use 960 ticks/beat (regardless of quantisation)
+                # This prevents 4x slowdown issue
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {seq_mode} mode → using 960 ticks/beat')
                 for event in sublayer_events:
-                    # Recalculate with 960 ticks/beat (1/4 of 3840)
+                    time_val = event.get('time_val', 0)
+                    dur_val = event.get('dur_val', 0)
+                    event['strtks'] = int(time_val * 960)  # 960 ticks/beat for Keys/MIDI mode
+                    event['lentks'] = int(dur_val * 960)
+                    # Recalculate step for display based on step_len
+                    event['step'] = int(time_val * steps_per_beat)
+                    # For Keys/MIDI mode, use lencount based on step_len (quantised behavior)
+                    if not is_unquantised:
+                        event['lencount'] = max(1, int(dur_val * steps_per_beat))
+                    else:
+                        event['lencount'] = 0  # Unquantised: use precise lentks timing
+            elif is_unquantised:
+                # Pads mode, unquantised: use 960 ticks/beat (finer resolution)
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: Pads mode, unquantised → using 960 ticks/beat, setting lencount=0')
+                for event in sublayer_events:
                     time_val = event.get('time_val', 0)
                     dur_val = event.get('dur_val', 0)
                     event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised
@@ -1997,18 +2015,16 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                     sample_lencount = sublayer_events[0].get('lencount')
                     logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: After unquantised fix, first event lencount={sample_lencount}')
             else:
-                # Quantised: recalculate step values, strtks, and lentks to match detected step_len
+                # Pads mode, quantised: use 3840 ticks/beat
                 # CRITICAL: Step values must match the step_len resolution
-                # CRITICAL: For quantised sequences, ensure strtks uses 3840 ticks/beat (not 960)
-                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Quantised, detected step_len={detected_step_len}, recalculating step values with {steps_per_beat} steps/beat, using 3840 ticks/beat')
+                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Pads mode, quantised, detected step_len={detected_step_len}, recalculating step values with {steps_per_beat} steps/beat, using 3840 ticks/beat')
                 for event in sublayer_events:
                     time_val = event.get('time_val', 0)
                     dur_val = event.get('dur_val', 0)
                     # Recalculate step based on detected step_len (e.g., 8 steps/beat for 1/32 notes)
                     event['step'] = int(time_val * steps_per_beat)
-                    # Recalculate strtks and lentks with 3840 ticks/beat for quantised sequences
-                    # This ensures quantised sequences use correct tick rate (not 960 which would be 4x too slow)
-                    event['strtks'] = int(time_val * 3840)  # 3840 ticks/beat for quantised
+                    # Recalculate strtks and lentks with 3840 ticks/beat for quantised Pads mode sequences
+                    event['strtks'] = int(time_val * 3840)  # 3840 ticks/beat for quantised Pads mode
                     event['lentks'] = int(dur_val * 3840)
                     # Recalculate lencount based on detected step_len (steps_per_beat)
                     event['lencount'] = max(1, int(dur_val * steps_per_beat))  # Step-based length for quantised
