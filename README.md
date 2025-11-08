@@ -107,22 +107,26 @@ Your Ableton project should be set up as follows:
 ⚠️ **The converter uses chain order to determine pad positions**, not MIDI note assignments.
 
 **Before converting**, arrange your chains in the Drum Rack chain list to match your desired pad layout:
-- Chain 0 → Blackbox Pad 0
-- Chain 1 → Blackbox Pad 1
-- Chain 2 → Blackbox Pad 2
+- Chain 0 → Blackbox Pad 1 (bottom-left)
+- Chain 1 → Blackbox Pad 2
+- Chain 2 → Blackbox Pad 3
+- Chain 3 → Blackbox Pad 4 (bottom-right)
+- Chain 4 → Blackbox Pad 5
 - ... and so on
 
 See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflows.
 
 ## Blackbox Pad Layout
 
-The Blackbox uses a 4×4 pad grid:
+The Blackbox uses a 4×4 pad grid. **Pads are numbered 1-16, starting from bottom-left:**
 ```
-Row 0 (top):     0   1   2   3
-Row 1:           4   5   6   7
-Row 2:           8   9  10  11
-Row 3 (bottom): 12  13  14  15
+Row 0 (top):     13  14  15  16
+Row 1:           9   10  11  12
+Row 2:           5   6   7   8
+Row 3 (bottom):  1   2   3   4
 ```
+
+**Note**: The code uses 0-15 internally, but Blackbox displays pads as 1-16.
 
 ## What Gets Converted
 

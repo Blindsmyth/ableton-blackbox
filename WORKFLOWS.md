@@ -142,21 +142,28 @@ Convert non-WAV samples in Ableton before converting.
 
 ### Blackbox Pad Layout
 
+**Pads are numbered 1-16, starting from bottom-left:**
+
 ```
-Row 0 (top):     0   1   2   3
-Row 1:           4   5   6   7
-Row 2:           8   9  10  11
-Row 3 (bottom): 12  13  14  15
+Row 0 (top):     13  14  15  16
+Row 1:           9   10  11  12
+Row 2:           5   6   7   8
+Row 3 (bottom):  1   2   3   4
 ```
 
 ### Drum Rack Mapping
 
-- **Chain 0** → **Pad 0** (row 0, col 0)
-- **Chain 1** → **Pad 1** (row 0, col 1)
-- **Chain 2** → **Pad 2** (row 0, col 2)
+- **Chain 0** → **Pad 1** (bottom-left, row 3, col 0)
+- **Chain 1** → **Pad 2** (row 3, col 1)
+- **Chain 2** → **Pad 3** (row 3, col 2)
+- **Chain 3** → **Pad 4** (bottom-right, row 3, col 3)
+- **Chain 4** → **Pad 5** (row 2, col 0)
 - ... and so on
+- **Chain 15** → **Pad 16** (top-right, row 0, col 3)
 
-**Important**: Mapping is by chain order, not MIDI note. Arrange chains in Ableton before converting.
+**Important**: 
+- Mapping is by chain order, not MIDI note. Arrange chains in Ableton before converting.
+- The code uses 0-15 internally, but Blackbox displays pads as 1-16.
 
 ### Sequence Location
 
