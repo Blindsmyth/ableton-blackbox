@@ -1500,10 +1500,10 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
             logger.debug(f'  Grid analysis: Mixed triplets ({triplet_only_ratio*100:.0f}% triplet-only) and straight ({straight_only_ratio*100:.0f}% straight-only) detected')
     
     # CRITICAL: If triplets are detected and have good alignment, prefer triplet step_len
-    # Only do this if triplets are well-aligned (>95%) and NOT mixed with straight notes
+    # Only do this if triplets are well-aligned (>80%) and NOT mixed with straight notes
     # BUT: Prefer straight notes over triplets when both align equally well (default to straight)
     # Mixed patterns must always be unquantised
-    if best_triplet_match and best_triplet_score >= 0.95 and not mixed_pattern:
+    if best_triplet_match and best_triplet_score >= 0.80 and not mixed_pattern:
         # Only use triplet step_len if it's BETTER than the straight match
         # If scores are equal, prefer straight (default behavior)
         # Check if best_match is a straight note grid (not triplet)
@@ -1526,9 +1526,10 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
     
     # Determine if unquantised
     # Unquantised if:
-    # 1. Less than 95% aligned to any grid (off-grid timing) - use 95% to allow for rounding errors
+    # 1. Less than 80% aligned to any grid (off-grid timing) - lowered from 95% to 80% to allow for slight off-grid notes
+    #    This prevents sequences with mostly quantised notes from being marked as unquantised
     # 2. Mixed triplets + straight notes (CRITICAL: always unquantised when mixed)
-    is_unquantised = best_score < 0.95 or mixed_pattern
+    is_unquantised = best_score < 0.80 or mixed_pattern
     
     if best_match:
         grid_ticks, step_len, grid_name = best_match
