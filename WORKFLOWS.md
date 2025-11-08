@@ -52,9 +52,11 @@ Track 2-17: MIDI Tracks (for sequences)
 Before converting:
 1. Open your Drum Rack in Ableton
 2. Arrange the **chains** (right side list) to match your desired pad order:
-   - Chain 0 = Pad 0 (top-left)
-   - Chain 1 = Pad 1
-   - Chain 2 = Pad 2
+   - Chain 0 = Pad 1 (bottom-left)
+   - Chain 1 = Pad 2
+   - Chain 2 = Pad 3
+   - Chain 3 = Pad 4 (bottom-right)
+   - Chain 4 = Pad 5
    - ... and so on
 3. Save your project
 4. Run the converter
@@ -169,8 +171,8 @@ Row 3 (bottom):  1   2   3   4
 
 Sequences are placed at pads matching their MIDI track index:
 - **Track 2** (first MIDI track) → Sequence at **Pad 1** (bottom-left)
-- **Track 3** → Sequence at **Pad 1**
-- **Track 4** → Sequence at **Pad 2**
+- **Track 3** → Sequence at **Pad 2**
+- **Track 4** → Sequence at **Pad 3**
 - ... and so on
 
 This is independent of which pad the sequence plays (controlled by `seqpadmapdest`).
