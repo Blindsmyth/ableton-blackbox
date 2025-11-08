@@ -31,10 +31,18 @@ Before making changes to sequence timing, step length, or sequence location logi
 - Set lencount=0
 - Step values still calculated based on step_len (default 1/16)
 
+## Test Output Versioning
+- **ALWAYS use version names in test output directories that correlate with git commit hashes**
+- The conversion script automatically appends the git commit hash to the output path (e.g., `test_output/v1633194/`)
+- This ensures test outputs can be easily tracked and compared with specific git commits
+- If git is not available, the script will still work but without automatic versioning
+- Manual versioning with `-V` flag takes precedence over automatic git versioning
+
 ## When Making Changes
 1. Read the context files listed above
 2. Check the reference file (preset 2.xml) for expected output
-3. Test with versioning (-V flag) to track changes
+3. Run conversion - it will automatically use git commit hash for versioning
 4. Verify step values match step_len resolution
 5. Verify sequence locations match track indices
+6. After testing, commit and push changes - the version name will match the commit hash
 

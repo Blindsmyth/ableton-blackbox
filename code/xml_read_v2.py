@@ -35,6 +35,7 @@ import shutil
 import logging
 import sys
 import struct
+import subprocess
 
 # Set up logging
 logging.basicConfig(
@@ -1783,8 +1784,9 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                                     event_chan = 256 + pad_number
                                     event_pitch = 0
                                 elif seq_mode == 'Keys':
-                                    # Keys mode: pitch is the MIDI note, chan is standard
-                                    event_chan = 256
+                                    # Keys mode when routed to pad: use chan=256+target_pad, pitch=MIDI note (matches reference)
+                                    # This is a special case where seqstepmode="1" but behaves like Keys mode
+                                    event_chan = 256 + target_pad
                                     event_pitch = midi_note
                                 elif seq_mode == 'MIDI':
                                     # MIDI mode: pitch is MIDI note, chan is MIDI channel
@@ -2068,7 +2070,8 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                 seqpadmapdest_val = str(sequence_location_pad)  # Sequence location (where the cell is placed)
                 midioutchan_val = '0'
             elif seq_mode == 'Keys':
-                seqstepmode_val = '0'  # Keys mode
+                # When routed to a pad, use seqstepmode="1" with chan=256+target_pad and pitch=MIDI note (matches reference)
+                seqstepmode_val = '1'  # Pads mode format but Keys mode behavior
                 seqpadmapdest_val = str(target_pad)  # Target pad to play
                 midioutchan_val = '0'
             elif seq_mode == 'MIDI':
@@ -2370,12 +2373,32 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", help="Verbose output", action='store_true')
     args = parser.parse_args()
     
+    # Get git commit hash for versioning (if in a git repo)
+    git_version = None
+    try:
+        # Get the script's directory to find git repo
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], 
+                              cwd=script_dir, 
+                              capture_output=True, 
+                              text=True, 
+                              timeout=5)
+        if result.returncode == 0:
+            git_version = result.stdout.strip()
+            logger.info(f'Git version: {git_version}')
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        logger.debug(f'Could not get git version: {e}')
+    
     # Validate and append version to output path if provided
     if args.Version:
         if not args.Version.isdigit() or len(args.Version) != 3:
             logger.error(f'Version must be a 3-digit number (e.g., 001, 002), got: {args.Version}')
             sys.exit(1)
         args.Output = os.path.join(args.Output, f'v{args.Version}')
+    elif git_version:
+        # Automatically use git commit hash as version name
+        args.Output = os.path.join(args.Output, f'v{git_version}')
+        logger.info(f'Using git commit hash as version: v{git_version}')
     
     if args.verbose:
         logger.setLevel(logging.DEBUG)
