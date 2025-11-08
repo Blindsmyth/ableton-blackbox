@@ -1974,13 +1974,21 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                     sample_lencount = sublayer_events[0].get('lencount')
                     logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: After unquantised fix, first event lencount={sample_lencount}')
             else:
-                # Quantised: recalculate step values to match detected step_len
+                # Quantised: recalculate step values, strtks, and lentks to match detected step_len
                 # CRITICAL: Step values must match the step_len resolution
-                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Quantised, detected step_len={detected_step_len}, recalculating step values with {steps_per_beat} steps/beat')
+                # CRITICAL: For quantised sequences, ensure strtks uses 3840 ticks/beat (not 960)
+                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Quantised, detected step_len={detected_step_len}, recalculating step values with {steps_per_beat} steps/beat, using 3840 ticks/beat')
                 for event in sublayer_events:
                     time_val = event.get('time_val', 0)
+                    dur_val = event.get('dur_val', 0)
                     # Recalculate step based on detected step_len (e.g., 8 steps/beat for 1/32 notes)
                     event['step'] = int(time_val * steps_per_beat)
+                    # Recalculate strtks and lentks with 3840 ticks/beat for quantised sequences
+                    # This ensures quantised sequences use correct tick rate (not 960 which would be 4x too slow)
+                    event['strtks'] = int(time_val * 3840)  # 3840 ticks/beat for quantised
+                    event['lentks'] = int(dur_val * 3840)
+                    # Recalculate lencount based on detected step_len (steps_per_beat)
+                    event['lencount'] = max(1, int(dur_val * steps_per_beat))  # Step-based length for quantised
             
             # Create cell element for this sublayer
             # CRITICAL: Use sequence_row and sequence_column to ensure correct location
