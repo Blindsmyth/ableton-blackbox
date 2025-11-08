@@ -1388,7 +1388,12 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
         for tick_pos in tick_positions:
             # Check if this note is on a 32nd note grid but NOT on a 16th note grid
             # 32nd note = 120 ticks, 16th note = 240 ticks
-            if tick_pos % 120 == 0 and tick_pos % 240 != 0:
+            # Use tolerance for rounding errors
+            remainder_32nd = tick_pos % 120
+            remainder_16th = tick_pos % 240
+            is_32nd = (remainder_32nd == 0 or remainder_32nd == 1 or remainder_32nd == 119)
+            is_16th = (remainder_16th == 0 or remainder_16th == 1 or remainder_16th == 239)
+            if is_32nd and not is_16th:
                 has_32nd_notes = True
                 break
     
@@ -1403,7 +1408,10 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
         
         aligned = 0
         for tick_pos in tick_positions:
-            if tick_pos % grid_ticks == 0:
+            # Check alignment with small tolerance for rounding errors (within 1 tick)
+            # This handles cases where floating point conversion causes slight offsets
+            remainder = tick_pos % grid_ticks
+            if remainder == 0 or remainder == (grid_ticks - 1) or remainder == 1:
                 aligned += 1
         
         score = aligned / len(tick_positions)
@@ -1438,7 +1446,9 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
     for grid_ticks, step_len, name in triplet_grids:
         aligned = 0
         for tick_pos in tick_positions:
-            if tick_pos % grid_ticks == 0:
+            # Check alignment with small tolerance for rounding errors (within 1 tick)
+            remainder = tick_pos % grid_ticks
+            if remainder == 0 or remainder == (grid_ticks - 1) or remainder == 1:
                 aligned += 1
         score = aligned / len(tick_positions) if len(tick_positions) > 0 else 0
         if aligned > len(tick_positions) * 0.5:  # More than 50% aligned to triplet
@@ -1500,10 +1510,10 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
             logger.debug(f'  Grid analysis: Mixed triplets ({triplet_only_ratio*100:.0f}% triplet-only) and straight ({straight_only_ratio*100:.0f}% straight-only) detected')
     
     # CRITICAL: If triplets are detected and have good alignment, prefer triplet step_len
-    # Only do this if triplets are well-aligned (>80%) and NOT mixed with straight notes
+    # Only do this if triplets are well-aligned (>95%) and NOT mixed with straight notes
     # BUT: Prefer straight notes over triplets when both align equally well (default to straight)
     # Mixed patterns must always be unquantised
-    if best_triplet_match and best_triplet_score >= 0.80 and not mixed_pattern:
+    if best_triplet_match and best_triplet_score >= 0.95 and not mixed_pattern:
         # Only use triplet step_len if it's BETTER than the straight match
         # If scores are equal, prefer straight (default behavior)
         # Check if best_match is a straight note grid (not triplet)
@@ -1526,10 +1536,9 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
     
     # Determine if unquantised
     # Unquantised if:
-    # 1. Less than 80% aligned to any grid (off-grid timing) - lowered from 95% to 80% to allow for slight off-grid notes
-    #    This prevents sequences with mostly quantised notes from being marked as unquantised
+    # 1. Less than 95% aligned to any grid (off-grid timing) - use 95% to allow for rounding errors
     # 2. Mixed triplets + straight notes (CRITICAL: always unquantised when mixed)
-    is_unquantised = best_score < 0.80 or mixed_pattern
+    is_unquantised = best_score < 0.95 or mixed_pattern
     
     if best_match:
         grid_ticks, step_len, grid_name = best_match
