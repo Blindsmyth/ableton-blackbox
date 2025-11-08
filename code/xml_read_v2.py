@@ -1546,6 +1546,17 @@ def detect_note_grid_pattern(events, ticks_per_beat=3840):
         grid_ticks, step_len, grid_name = best_match
         if is_unquantised:
             logger.info(f'  Grid analysis: {best_score*100:.0f}% aligned to {grid_name}, unquantised detected (mixed={mixed_pattern})')
+            # Debug: Log why it's unquantised with more detail
+            if best_score < 0.95:
+                logger.debug(f'    Reason: Alignment score {best_score*100:.1f}% < 95% threshold')
+                # Log sample tick positions for debugging
+                if len(tick_positions) > 0:
+                    sample_ticks = tick_positions[:5]
+                    sample_beats = [t / ticks_per_beat for t in sample_ticks]
+                    remainders = [t % grid_ticks for t in sample_ticks]
+                    logger.debug(f'    Sample ticks: {sample_ticks}, beats: {[f"{b:.3f}" for b in sample_beats]}, remainders: {remainders}')
+            if mixed_pattern:
+                logger.debug(f'    Reason: Mixed triplets and straight notes detected')
         else:
             logger.debug(f'  Grid analysis: {best_score*100:.0f}% aligned to {grid_name}, quantised')
     else:
