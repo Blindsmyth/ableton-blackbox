@@ -2031,8 +2031,8 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
                     event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised (both Keys and Pads)
                     event['lentks'] = 240  # Constant 240 ticks for unquantised sequences (matches reference)
                     event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
-                    # Recalculate step for display based on step_len
-                    event['step'] = int(time_val * steps_per_beat)
+                    # For unquantised sequences, step = floor(strtks / 960) (beat position, not step_len resolution)
+                    event['step'] = int(event['strtks'] // 960)
                     # For unquantised Keys mode, chan should be 256 (not 256+target_pad)
                     if seq_mode == 'Keys':
                         current_chan = event.get('chan', 256)
