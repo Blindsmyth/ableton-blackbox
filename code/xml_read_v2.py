@@ -2016,41 +2016,31 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             }
             steps_per_beat = steps_per_beat_map.get(step_len, 4)
             
-            # CRITICAL: Tick rate depends on BOTH quantisation state AND sequence mode
+            # CRITICAL: Tick rate depends ONLY on quantisation state, NOT on sequence mode
             # Quantised sequences (both Keys and Pads): Use 3840 ticks/beat
-            # Unquantised Pads mode: Use 960 ticks/beat
-            # Unquantised Keys mode (seqstepmode="0"): Use 3840 ticks/beat (matches reference - step=4 for strtks=3840 = 1 beat)
+            # Unquantised sequences (both Keys and Pads): Use 960 ticks/beat
+            # Quantisation detection is independent of Keys/Pads mode
             if is_unquantised:
-                if seq_mode == 'Keys':
-                    # Unquantised Keys mode: use 3840 ticks/beat (matches reference format)
-                    # Reference shows step=4 for strtks=3840, which at 1/16 = 1 beat, so 3840 ticks/beat
-                    logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {seq_mode} mode, unquantised → using 3840 ticks/beat (Keys mode), setting lencount=0')
-                    for event in sublayer_events:
-                        time_val = event.get('time_val', 0)
-                        dur_val = event.get('dur_val', 0)
-                        event['strtks'] = int(time_val * 3840)  # 3840 ticks/beat for unquantised Keys mode
-                        event['lentks'] = 240  # Constant 240 ticks for unquantised sequences (matches reference)
-                        event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
-                        # Recalculate step for display based on step_len
-                        event['step'] = int(time_val * steps_per_beat)
-                        # For unquantised Keys mode, chan should be 256 (not 256+target_pad)
+                # Unquantised: use 960 ticks/beat for strtks, constant lentks=240, lencount=0
+                # Both Keys and Pads modes use identical timing parameters (960 ticks/beat)
+                # CRITICAL: For unquantised Keys mode, chan should be 256 (not 256+target_pad)
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {seq_mode} mode, unquantised → using 960 ticks/beat, setting lencount=0')
+                for event in sublayer_events:
+                    time_val = event.get('time_val', 0)
+                    dur_val = event.get('dur_val', 0)
+                    event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised (both Keys and Pads)
+                    event['lentks'] = 240  # Constant 240 ticks for unquantised sequences (matches reference)
+                    event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
+                    # Recalculate step for display based on step_len
+                    event['step'] = int(time_val * steps_per_beat)
+                    # For unquantised Keys mode, chan should be 256 (not 256+target_pad)
+                    if seq_mode == 'Keys':
                         current_chan = event.get('chan', 256)
                         # Convert to int if it's a string, then check if it's >= 256
                         chan_int = int(current_chan) if isinstance(current_chan, str) else current_chan
                         if chan_int >= 256:
                             # Update chan to 256 for unquantised Keys mode
                             event['chan'] = 256
-                else:
-                    # Unquantised Pads mode: use 960 ticks/beat for strtks, constant lentks=240, lencount=0
-                    logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {seq_mode} mode, unquantised → using 960 ticks/beat, setting lencount=0')
-                    for event in sublayer_events:
-                        time_val = event.get('time_val', 0)
-                        dur_val = event.get('dur_val', 0)
-                        event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised Pads mode
-                        event['lentks'] = 240  # Constant 240 ticks for unquantised sequences (matches reference)
-                        event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
-                        # Recalculate step for display based on step_len
-                        event['step'] = int(time_val * steps_per_beat)
                 # Debug: verify lencount was set correctly
                 if sublayer_events:
                     sample_lencount = sublayer_events[0].get('lencount')
