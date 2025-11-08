@@ -451,7 +451,9 @@ def drum_rack_extract(drum_rack_device):
         # Extract pads from branches
         # Map branch/chain index to Blackbox pad
         # Default: Use chain order as pad order (Branch 0 = Pad 0, etc.)
-        for branch_index in range(min(len(branches), 16)):
+        # Blackbox has 16 pads in a 4x4 grid
+        max_pads = 16
+        for branch_index in range(min(len(branches), max_pads)):
             branch = branches[branch_index]
             
             # Extract branch Id attribute (used for Keys mode routing)
@@ -1043,16 +1045,22 @@ def track_iterator(tracks):
     pad_list = drum_rack_extract(drum_rack)
     
     # Collect MIDI tracks (tracks 2-17 should be the 16 MIDI tracks)
+    # Support both: numbered tracks (tracks 2-17) and named tracks (e.g., "Seq1", "Seq2", etc.)
     midi_tracks = []
+    midi_track_info = []  # Store (track, name, index) tuples
     for i in range(1, min(17, len(tracks))):
         track = tracks[i]
         devices_check, track_type_check = device_extract(track, i+1)
         if track_type_check == 'MidiTrack':
+            # Extract track name
+            name_elem = find_element_by_tag(track, 'Name')
+            track_name = name_elem.attrib.get('Value', '') if name_elem is not None else ''
             midi_tracks.append(track)
-            logger.info(f'  Found MIDI track {i} for sequence')
+            midi_track_info.append((track, track_name, len(midi_tracks)-1))
+            logger.info(f'  Found MIDI track {i+1} (name="{track_name}") for sequence (midi_tracks index {len(midi_tracks)-1})')
     
     logger.info(f'Extracted {len(pad_list)} drum pads and {len(midi_tracks)} MIDI tracks')
-    return pad_list, midi_tracks
+    return pad_list, midi_tracks, midi_track_info
 
 
 # Helper functions for generating Blackbox XML
@@ -1306,38 +1314,251 @@ def make_drum_rack_pads(session, pad_list, tempo):
     return session, assets
 
 
-def detect_unquantised_notes(events, grid_resolution=240):
+def detect_note_grid_pattern(events, ticks_per_beat=3840):
     """
-    Detect if MIDI notes are quantized to a grid or have free timing.
+    Detect the note grid pattern and quantization state.
+    
+    Analyzes note timing to determine:
+    - Grid resolution (1/16, 1/32, triplets, etc.)
+    - Whether notes are quantised or unquantised
+    - If triplets are mixed with straight notes (requires unquantised)
     
     Args:
-        events: List of note events with 'strtks' values
-        grid_resolution: Minimum grid resolution in ticks (240 = 1/16 note at 3840 ticks/beat)
+        events: List of note events with 'time_val' values (in beats)
+        ticks_per_beat: Ticks per beat (3840 for quantised, 960 for unquantised)
     
     Returns:
-        bool: True if notes are unquantised (off-grid), False if quantized
+        dict with keys:
+            'is_unquantised': bool
+            'step_len': int (Blackbox step_len value: 14=1/32, 12=1/32T, 10=1/16, 11=1/16T, etc.)
+            'has_triplets': bool
+            'has_straight': bool
+            'grid_resolution': int (ticks)
     """
     if not events:
-        return False
+        return {'is_unquantised': False, 'step_len': 10, 'has_triplets': False, 'has_straight': False, 'grid_resolution': 240}
     
-    # Check if any note starts are off-grid (not aligned to grid_resolution)
-    off_grid_count = 0
+    # Convert time values to ticks for analysis
+    tick_positions = []
     for event in events:
-        strtks = event.get('strtks', 0)
-        # Check if strtks is aligned to the grid
-        if strtks % grid_resolution != 0:
-            off_grid_count += 1
+        time_val = event.get('time_val', 0)
+        tick_pos = int(time_val * ticks_per_beat)
+        tick_positions.append(tick_pos)
     
-    # If more than 20% of notes are off-grid, consider it unquantised
-    unquantised = off_grid_count > len(events) * 0.2
+    # Test different grid resolutions
+    # 1/32 note = 120 ticks (at 3840 ticks/beat)
+    # 1/32 triplet = 80 ticks (3840/3/16) - 3 notes in time of 2 32nd notes
+    # 1/16 note = 240 ticks
+    # 1/16 triplet = 160 ticks (3840/3/8) - 3 notes in time of 2 16th notes
+    # 1/8 note = 480 ticks
+    # 1/8 triplet = 320 ticks (3840/3/4) - 3 notes in time of 2 8th notes
     
-    if unquantised:
-        logger.debug(f'  Detected unquantised: {off_grid_count}/{len(events)} notes off-grid')
+    resolutions = [
+        (120, 14, '1/32'),      # step_len 14 = 1/32
+        (160, 11, '1/16T'),     # step_len 11 = 1/16T (triplet)
+        (240, 10, '1/16'),      # step_len 10 = 1/16
+        (320, 9, '1/8T'),       # step_len 9 = 1/8T (triplet)
+        (480, 8, '1/8'),        # step_len 8 = 1/8
+        (960, 6, '1/4'),        # step_len 6 = 1/4
+        (1920, 4, '1/2'),       # step_len 4 = 1/2
+    ]
     
-    return unquantised
+    # Note: 1/32T (step_len 12) uses 160 ticks, same as 1/16T
+    # We'll handle 1/32T separately if needed, but typically 1/16T is more common
+    
+    # Check alignment to each grid
+    # CRITICAL: Default to 1/16 (step_len=10) unless we actually need finer resolution
+    # Only use 1/32 if we have notes that fall on 32nd note positions that are NOT also 16th note positions
+    best_match = None
+    best_score = 0
+    triplet_aligned = 0
+    straight_aligned = 0
+    
+    # Check triplet grids separately
+    # 1/32T uses 80 ticks, but we'll use 160 ticks (1/16T) as it's more common
+    # If we detect 1/32T specifically, we can use step_len=12
+    triplet_grids = [(160, 11, '1/16T'), (320, 9, '1/8T')]
+    straight_grids = [(120, 14, '1/32'), (240, 10, '1/16'), (480, 8, '1/8'), (960, 6, '1/4'), (1920, 4, '1/2')]
+    
+    # First, check if we have notes that require 32nd note resolution
+    # Notes at 0.125, 0.375, 0.625, 0.875 beats (odd 32nd notes) require 1/32 resolution
+    # Notes at 0.0, 0.25, 0.5, 0.75 beats (even 32nd notes = 16th notes) can use 1/16
+    has_32nd_notes = False
+    if len(tick_positions) > 0:
+        for tick_pos in tick_positions:
+            # Check if this note is on a 32nd note grid but NOT on a 16th note grid
+            # 32nd note = 120 ticks, 16th note = 240 ticks
+            if tick_pos % 120 == 0 and tick_pos % 240 != 0:
+                has_32nd_notes = True
+                break
+    
+    # Score each resolution, but prefer 1/16 over 1/32 unless we actually need 32nd notes
+    # Also prefer straight notes over triplets when scores are equal
+    best_straight_match = None
+    best_straight_score = 0
+    for grid_ticks, step_len, name in resolutions:
+        # Skip 1/32 if we don't actually have 32nd notes
+        if step_len == 14 and not has_32nd_notes:
+            continue  # Skip 1/32 if we don't need it
+        
+        aligned = 0
+        for tick_pos in tick_positions:
+            if tick_pos % grid_ticks == 0:
+                aligned += 1
+        
+        score = aligned / len(tick_positions)
+        
+        # Track best straight match separately
+        is_triplet = step_len in [11, 9]  # Triplet step_len values
+        if not is_triplet:
+            if score > best_straight_score or (score == best_straight_score and step_len == 10 and best_straight_match and best_straight_match[1] == 14):
+                best_straight_score = score
+                best_straight_match = (grid_ticks, step_len, name)
+        
+        # Prefer 1/16 (step_len=10) over 1/32 (step_len=14) if scores are equal
+        # Prefer straight notes over triplets when scores are equal
+        # This ensures we default to 1/16 straight when both align equally well
+        is_better = score > best_score
+        is_equal_but_preferred = False
+        if score == best_score:
+            # If equal, prefer straight over triplet, and 1/16 over 1/32
+            if not is_triplet and best_match and best_match[1] in [11, 9]:  # Current is triplet, new is straight
+                is_equal_but_preferred = True
+            elif step_len == 10 and best_match and best_match[1] == 14:  # Current is 1/32, new is 1/16
+                is_equal_but_preferred = True
+        
+        if is_better or is_equal_but_preferred:
+            best_score = score
+            best_match = (grid_ticks, step_len, name)
+    
+    # Check if notes align to triplet grids (for mixed pattern detection and triplet preference)
+    best_triplet_match = None
+    best_triplet_score = 0
+    triplet_count = 0
+    for grid_ticks, step_len, name in triplet_grids:
+        aligned = 0
+        for tick_pos in tick_positions:
+            if tick_pos % grid_ticks == 0:
+                aligned += 1
+        score = aligned / len(tick_positions) if len(tick_positions) > 0 else 0
+        if aligned > len(tick_positions) * 0.5:  # More than 50% aligned to triplet
+            triplet_aligned = max(triplet_aligned, aligned)
+            triplet_count = max(triplet_count, aligned)
+        if score > best_triplet_score:
+            best_triplet_score = score
+            best_triplet_match = (grid_ticks, step_len, name)
+    
+    # Check if notes align to straight grids (for mixed pattern detection)
+    straight_count = 0
+    for grid_ticks, step_len, name in straight_grids:
+        aligned = 0
+        for tick_pos in tick_positions:
+            if tick_pos % grid_ticks == 0:
+                aligned += 1
+        if aligned > len(tick_positions) * 0.5:  # More than 50% aligned to straight
+            straight_aligned = max(straight_aligned, aligned)
+            straight_count = max(straight_count, aligned)
+    
+    # CRITICAL: Check for mixed triplets + straight (requires unquantised)
+    # Mixed pattern = notes that align to triplets but NOT straight, AND notes that align to straight but NOT triplets
+    # Notes that align to BOTH grids (like whole beats) should NOT count as mixed
+    mixed_pattern = False
+    if len(tick_positions) > 0:
+        # Count notes that align ONLY to triplets (not to straight)
+        triplet_only_count = 0
+        straight_only_count = 0
+        
+        for tick_pos in tick_positions:
+            aligns_to_triplet = False
+            aligns_to_straight = False
+            
+            # Check if aligns to any triplet grid
+            for grid_ticks, step_len, name in triplet_grids:
+                if tick_pos % grid_ticks == 0:
+                    aligns_to_triplet = True
+                    break
+            
+            # Check if aligns to any straight grid
+            for grid_ticks, step_len, name in straight_grids:
+                if tick_pos % grid_ticks == 0:
+                    aligns_to_straight = True
+                    break
+            
+            # Count notes that align to one but not the other
+            if aligns_to_triplet and not aligns_to_straight:
+                triplet_only_count += 1
+            elif aligns_to_straight and not aligns_to_triplet:
+                straight_only_count += 1
+        
+        # Mixed if we have notes that align ONLY to triplets AND notes that align ONLY to straight
+        # Both must be present (>20% each) to be considered truly mixed
+        triplet_only_ratio = triplet_only_count / len(tick_positions) if triplet_only_count > 0 else 0
+        straight_only_ratio = straight_only_count / len(tick_positions) if straight_only_count > 0 else 0
+        
+        if triplet_only_ratio > 0.2 and straight_only_ratio > 0.2:
+            mixed_pattern = True
+            logger.debug(f'  Grid analysis: Mixed triplets ({triplet_only_ratio*100:.0f}% triplet-only) and straight ({straight_only_ratio*100:.0f}% straight-only) detected')
+    
+    # CRITICAL: If triplets are detected and have good alignment, prefer triplet step_len
+    # Only do this if triplets are well-aligned (>95%) and NOT mixed with straight notes
+    # BUT: Prefer straight notes over triplets when both align equally well (default to straight)
+    # Mixed patterns must always be unquantised
+    if best_triplet_match and best_triplet_score >= 0.95 and not mixed_pattern:
+        # Only use triplet step_len if it's BETTER than the straight match
+        # If scores are equal, prefer straight (default behavior)
+        # Check if best_match is a straight note grid (not triplet)
+        best_is_triplet = best_match and best_match[1] in [11, 9]  # Triplet step_len values
+        
+        if best_triplet_score > best_straight_score:
+            # Triplets align better than straight - use triplet step_len
+            best_match = best_triplet_match
+            best_score = best_triplet_score
+            logger.debug(f'  Grid analysis: Triplets detected ({best_triplet_score*100:.0f}% aligned), using triplet step_len')
+        elif best_triplet_score == best_straight_score and best_is_triplet:
+            # Scores equal but current best_match is triplet - prefer straight (default)
+            if best_straight_match:
+                best_match = best_straight_match
+                best_score = best_straight_score
+            logger.debug(f'  Grid analysis: Triplets detected but equal to straight, preferring straight step_len (default)')
+        else:
+            # Straight notes align better or are already selected
+            logger.debug(f'  Grid analysis: Triplets detected but straight notes align better, using straight step_len')
+    
+    # Determine if unquantised
+    # Unquantised if:
+    # 1. Less than 95% aligned to any grid (off-grid timing) - use 95% to allow for rounding errors
+    # 2. Mixed triplets + straight notes (CRITICAL: always unquantised when mixed)
+    is_unquantised = best_score < 0.95 or mixed_pattern
+    
+    if best_match:
+        grid_ticks, step_len, grid_name = best_match
+        if is_unquantised:
+            logger.info(f'  Grid analysis: {best_score*100:.0f}% aligned to {grid_name}, unquantised detected (mixed={mixed_pattern})')
+        else:
+            logger.debug(f'  Grid analysis: {best_score*100:.0f}% aligned to {grid_name}, quantised')
+    else:
+        # No match found (shouldn't happen, but default to 1/16)
+        step_len = 10  # Default to 1/16
+        grid_ticks = 240
+        is_unquantised = True
+    
+    # CRITICAL: Ensure we default to 1/16 if no match found
+    # (1/32 is already skipped in the loop if not needed, so this is just a safety check)
+    if not best_match:
+        step_len = 10  # Default to 1/16
+        grid_ticks = 240
+        logger.debug(f'  Grid analysis: No grid match found, defaulting to 1/16')
+    
+    return {
+        'is_unquantised': is_unquantised,
+        'step_len': step_len if not is_unquantised else 10,  # Use detected step_len only if quantised
+        'has_triplets': triplet_aligned > 0,
+        'has_straight': straight_aligned > 0,
+        'grid_resolution': grid_ticks if best_match else 240
+    }
 
 
-def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
+def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=None, unquantised=False):
     """
     Create Blackbox sequences from MIDI tracks using firmware 2.3+ format.
     Each MIDI track can have up to 4 clips mapped to sub-layers A/B/C/D.
@@ -1379,13 +1600,18 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
         # Detect sequence mode for this track
         seq_mode, mode_target = detect_sequence_mode(track)
         
-        pad_num = track_idx  # Direct mapping: MIDI track 1 -> Pad 0, etc.
-        row, column = row_column(pad_num)
+        # Get track name for logging/identification (track names like "Seq1", "Seq2" are just labels)
+        track_name = None
+        if midi_track_info and track_idx < len(midi_track_info):
+            track_name = midi_track_info[track_idx][1]
         
-        # For Keys mode, determine target pad from branch Id
-        target_pad = pad_num  # Default
+        # Determine target pad from routing (not from track name or index)
+        # For Keys mode: routing to specific pad via branch_id determines target_pad
+        # For Pads mode: sequence location is ALWAYS determined by track index (CRITICAL: must match track_idx)
+        target_pad = track_idx  # Default: use track index for sequence location
+        
         if seq_mode == 'Keys' and mode_target is not None:
-            # mode_target is the branch_id from the routing
+            # mode_target is the branch_id from the routing (e.g., B40 → 40)
             branch_id = mode_target
             
             # Find which pad has this branch_id
@@ -1400,10 +1626,22 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             if not target_found:
                 # Branch Id not found, fall back to track position
                 logger.warning(f'  Keys mode: Branch Id {branch_id} not found in drum rack')
-                logger.warning(f'  Falling back to track position (Pad {pad_num})')
-                target_pad = pad_num
+                logger.warning(f'  Falling back to track position (Pad {track_idx})')
+                target_pad = track_idx
         
-        logger.info(f'Track {track_idx}: Mode={seq_mode}, Branch/Channel={mode_target}, Sequence Pad={pad_num}, Target Pad={target_pad}')
+        # For row/column calculation:
+        # CRITICAL: Sequence location (row/column) ALWAYS matches track index for both Pads and Keys mode
+        # The seqpadmapdest parameter determines which pad the sequence plays, not where it's located
+        # This ensures track 0 → location pad 0, track 1 → location pad 1, etc.
+        sequence_location_pad = track_idx
+        row, column = row_column(sequence_location_pad)
+        
+        # CRITICAL: Store row/column as local variables to avoid any potential scope issues
+        sequence_row = row
+        sequence_column = column
+        
+        track_name_str = f' (name="{track_name}")' if track_name else ''
+        logger.info(f'Track {track_idx}{track_name_str}: Mode={seq_mode}, Branch/Channel={mode_target}, Target Pad={target_pad}, Sequence Location={sequence_location_pad} (row={sequence_row}, col={sequence_column})')
         
         # Extract up to 4 MIDI clips as sub-layers
         sub_layers = []
@@ -1435,8 +1673,18 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                         if value_elem.tag == 'Value' and len(value_elem) > 0:
                             if value_elem[0].tag == 'MidiClip':
                                 midi_clip = value_elem[0]
+                                # DEBUG: Count notes in this clip before adding
+                                notes_elem = find_element_by_tag(midi_clip, 'Notes')
+                                clip_note_count = 0
+                                if notes_elem:
+                                    key_tracks = find_element_by_tag(notes_elem, 'KeyTracks')
+                                    if key_tracks:
+                                        for kt in key_tracks:
+                                            notes = find_element_by_tag(kt, 'Notes')
+                                            if notes:
+                                                clip_note_count += len(notes)
                                 sub_layers.append(midi_clip)
-                                logger.info(f'  Track {track_idx}, Clip {clip_idx}: Found MIDI clip for sub-layer {chr(65+clip_idx)}')
+                                logger.info(f'  Track {track_idx}, Clip {clip_idx}: Found MIDI clip for sub-layer {chr(65+clip_idx)} ({clip_note_count} notes)')
         
         except Exception as e:
             logger.warning(f"Error extracting MIDI clips from track {track_idx}: {e}")
@@ -1447,11 +1695,27 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
         total_notes_all_layers = 0
         first_layer_with_notes = -1
         
+        # DEBUG: Log track info before processing sublayers
+        # Verify we have the right clips by checking first clip's note count
+        first_clip_notes = 0
+        if len(sub_layers) > 0:
+            first_clip = sub_layers[0]
+            notes_elem = find_element_by_tag(first_clip, 'Notes')
+            if notes_elem:
+                key_tracks = find_element_by_tag(notes_elem, 'KeyTracks')
+                if key_tracks:
+                    for kt in key_tracks:
+                        notes = find_element_by_tag(kt, 'Notes')
+                        if notes:
+                            first_clip_notes += len(notes)
+        logger.info(f'  Track {track_idx}: Processing {len(sub_layers)} clips, first clip has {first_clip_notes} notes, sequence_location_pad={sequence_location_pad}, target_pad={target_pad}')
+        
         for sublayer_idx in range(4):
             # Get the MIDI clip for this sublayer if it exists
             midi_clip = sub_layers[sublayer_idx] if sublayer_idx < len(sub_layers) else None
             
             # Extract all notes for this sublayer first (to check if we have events)
+            # CRITICAL: Must create a new list for each sublayer to avoid reference issues
             sublayer_events = []
             
             if midi_clip:
@@ -1460,6 +1724,14 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                     key_tracks = find_element_by_tag(notes, 'KeyTracks')
                     if key_tracks:
                         # Extract ALL KeyTracks and ALL notes
+                        # Debug: Count notes before extraction
+                        note_count_before = 0
+                        for kt in key_tracks:
+                            notes_elem = find_element_by_tag(kt, 'Notes')
+                            if notes_elem:
+                                note_count_before += len(notes_elem)
+                        if sublayer_idx == 0:  # Only log for first sublayer to avoid spam
+                            logger.info(f'    Track {track_idx}, Sub-layer {chr(65+sublayer_idx)}: Extracting {note_count_before} notes from clip')
                         for key_track in key_tracks:
                             midi_key = find_element_by_tag(key_track, 'MidiKey')
                             notes_elem = find_element_by_tag(key_track, 'Notes')
@@ -1510,7 +1782,8 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                     lencount = max(1, int(dur_val * 4))  # Will be set to 0 for unquantised
                                     
                                     # Store event data (tick rate will be adjusted if unquantised)
-                                    sublayer_events.append({
+                                    # CRITICAL: Create a new dict for each event to avoid reference issues
+                                    event_dict = {
                                         'step': step,
                                         'chan': str(event_chan),
                                         'type': 'note',
@@ -1521,7 +1794,8 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                                         'velocity': vel_val,
                                         'time_val': time_val,  # Store original time for recalculation
                                         'dur_val': dur_val     # Store original duration for recalculation
-                                    })
+                                    }
+                                    sublayer_events.append(event_dict)
             
             # Extract clip length from MIDI clip to calculate step_count
             # Try multiple methods: LoopEnd, CurrentEnd, or calculate from note positions
@@ -1557,10 +1831,9 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                 if clip_length_beats <= 1.0 and len(sublayer_events) > 0:
                     max_time = 0.0
                     for event in sublayer_events:
-                        # Calculate note end time from step and duration
-                        # step is in 16th notes, so divide by 4 to get beats
-                        note_start_beats = event['step'] / 4.0
-                        note_duration_beats = event['lencount'] / 4.0
+                        # Use original time_val and dur_val for accurate calculation
+                        note_start_beats = event.get('time_val', 0)
+                        note_duration_beats = event.get('dur_val', 0)
                         note_end_beats = note_start_beats + note_duration_beats
                         max_time = max(max_time, note_end_beats)
                     
@@ -1569,27 +1842,66 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                         clip_length_beats = int((max_time + 3) // 4) * 4
                         if clip_length_beats < 4:
                             clip_length_beats = max(4.0, max_time)  # At least 1 bar
-                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Clip length calculated from notes = {clip_length_beats} beats (max note end: {max_time})')
+                        logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Clip length calculated from notes = {clip_length_beats} beats (max note end: {max_time:.3f})')
                 
                 # If still no length found, use default
                 if clip_length_beats <= 1.0:
                     logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Using default clip length = 1.0 beat')
                     clip_length_beats = 1.0
             
+            # Track first layer with notes for activeseqlayer
+            if sublayer_events and first_layer_with_notes == -1:
+                first_layer_with_notes = sublayer_idx
+            
+            total_notes_all_layers += len(sublayer_events)
+            
+            # Detect note grid pattern and quantization state (independent of pad/keys mode)
+            # Analyze with 3840 ticks/beat first to detect grid pattern
+            # This must happen BEFORE step_len calculation so we can use detected step_len
+            if sublayer_events:
+                # Debug: Log first few note times for verification
+                if sublayer_idx == 0:  # Only for first sublayer
+                    first_times = [event.get('time_val', 0) for event in sublayer_events[:3]]
+                    logger.info(f'    Track {track_idx}, Sub-layer {chr(65+sublayer_idx)}: First note times (beats): {[f"{t:.6f}" for t in first_times]}')
+            grid_analysis = detect_note_grid_pattern(sublayer_events, ticks_per_beat=3840)
+            is_unquantised = grid_analysis['is_unquantised']
+            detected_step_len = grid_analysis['step_len']
+            
             # Calculate step_len and step_count from clip length
-            # Step length values (non-triplet only):
-            # 14 = 1/64, 12 = 1/32, 10 = 1/16, 8 = 1/8, 6 = 1/4, 4 = 1/2, 3 = 1 Bar, 2 = 2 Bars, 1 = 4 Bars, 0 = 8 Bars
-            # Triplet values (odd numbers, not used): 13 = 1/32T, 11 = 1/16T, 9 = 1/8T, 7 = 1/4T, 5 = 1/2T
+            # Step length values:
+            # 14 = 1/32, 12 = 1/32T, 10 = 1/16, 11 = 1/16T, 8 = 1/8, 9 = 1/8T, 6 = 1/4, 4 = 1/2, 3 = 1 Bar, 2 = 2 Bars, 1 = 4 Bars, 0 = 8 Bars
             # 1 bar = 4 beats
             # If no clip and no notes, use minimum length
             if not midi_clip and len(sublayer_events) == 0:
                 step_len = 10  # 1/16 notes
                 step_count = 1  # Minimum length for empty sublayer
             else:
-                # Start with 1/16 notes (most common resolution) and go coarser only if needed
-                # At 1/16: 1 beat = 4 steps, 1 bar (4 beats) = 16 steps
-                step_count = int(clip_length_beats * 4)
-                step_len = 10  # 1/16 notes (default)
+                # For quantised sequences, use detected step_len (e.g., 14 for 1/32 notes)
+                # For unquantised, use default 1/16 (step_len=10)
+                if not is_unquantised and detected_step_len:
+                    step_len = detected_step_len
+                    # Calculate step_count based on detected step_len
+                    # step_len 14 = 1/32: 1 beat = 8 steps, 1 bar = 32 steps
+                    # step_len 12 = 1/32T: 1 beat = 6 steps (triplet), 1 bar = 24 steps
+                    # step_len 10 = 1/16: 1 beat = 4 steps, 1 bar = 16 steps
+                    # step_len 11 = 1/16T: 1 beat = 3 steps (triplet), 1 bar = 12 steps
+                    # step_len 8 = 1/8: 1 beat = 2 steps, 1 bar = 8 steps
+                    # step_len 9 = 1/8T: 1 beat = 1.5 steps (triplet), 1 bar = 6 steps
+                    # Note: steps_per_beat_map is defined later for step recalculation
+                    steps_per_beat_map_temp = {
+                        14: 8,   # 1/32
+                        12: 6,   # 1/32T
+                        10: 4,   # 1/16
+                        11: 3,   # 1/16T
+                        8: 2,    # 1/8
+                        9: 1.5,  # 1/8T (will round)
+                    }
+                    steps_per_beat = steps_per_beat_map_temp.get(step_len, 4)
+                    step_count = int(clip_length_beats * steps_per_beat)
+                else:
+                    # Unquantised or no detection: use default 1/16
+                    step_len = 10
+                    step_count = int(clip_length_beats * 4)
                 
                 # If step_count exceeds 256, use coarser resolution
                 if step_count > 256:
@@ -1631,17 +1943,19 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                 if step_count < 1:
                     step_count = 1
                 
-                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: {clip_length_beats} beats → step_count={step_count}, step_len={step_len}')
+                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: {clip_length_beats} beats → step_count={step_count}, step_len={step_len} (unquantised={is_unquantised})')
             
-            # Track first layer with notes for activeseqlayer
-            if sublayer_events and first_layer_with_notes == -1:
-                first_layer_with_notes = sublayer_idx
-            
-            total_notes_all_layers += len(sublayer_events)
-            
-            # Detect if notes are unquantised (auto-detection)
-            # Check with 3840 ticks/beat grid (240 ticks = 1/16 note)
-            is_unquantised = detect_unquantised_notes(sublayer_events, grid_resolution=240)
+            # Recalculate step values based on detected step_len
+            # This must happen AFTER step_len is determined
+            steps_per_beat_map = {
+                14: 8,   # 1/32
+                12: 6,   # 1/32T
+                10: 4,   # 1/16
+                11: 3,   # 1/16T
+                8: 2,    # 1/8
+                9: 1.5,  # 1/8T (will round)
+            }
+            steps_per_beat = steps_per_beat_map.get(step_len, 4)
             
             # For unquantised notes, recalculate timing with 960 ticks/beat (finer resolution)
             if is_unquantised:
@@ -1652,15 +1966,28 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                     dur_val = event.get('dur_val', 0)
                     event['strtks'] = int(time_val * 960)  # 960 ticks/beat for unquantised
                     event['lentks'] = int(dur_val * 960)
-                    event['lencount'] = 0  # Use precise lentks timing
-                    # Recalculate step for display (still based on 16th notes)
-                    event['step'] = int(time_val * 4)
+                    event['lencount'] = 0  # Use precise lentks timing - CRITICAL: must be 0 for unquantised
+                    # Recalculate step for display based on step_len (unquantised uses step_len=10, which is 1/16 = 4 steps/beat)
+                    event['step'] = int(time_val * steps_per_beat)
+                # Debug: verify lencount was set correctly
+                if sublayer_events:
+                    sample_lencount = sublayer_events[0].get('lencount')
+                    logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: After unquantised fix, first event lencount={sample_lencount}')
+            else:
+                # Quantised: recalculate step values to match detected step_len
+                # CRITICAL: Step values must match the step_len resolution
+                logger.debug(f'    Sub-layer {chr(65+sublayer_idx)}: Quantised, detected step_len={detected_step_len}, recalculating step values with {steps_per_beat} steps/beat')
+                for event in sublayer_events:
+                    time_val = event.get('time_val', 0)
+                    # Recalculate step based on detected step_len (e.g., 8 steps/beat for 1/32 notes)
+                    event['step'] = int(time_val * steps_per_beat)
             
             # Create cell element for this sublayer
+            # CRITICAL: Use sequence_row and sequence_column to ensure correct location
             cell = ET.SubElement(session, 'cell')
             cell.attrib = {
-                'row': str(row),
-                'column': str(column),
+                'row': str(sequence_row),
+                'column': str(sequence_column),
                 'layer': '1',
                 'seqsublayer': str(sublayer_idx),
                 'type': 'noteseq'
@@ -1672,7 +1999,7 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             # Set parameters based on sequence mode
             if seq_mode == 'Pads':
                 seqstepmode_val = '1'  # Pads mode
-                seqpadmapdest_val = str(pad_num)  # Sequence location
+                seqpadmapdest_val = str(sequence_location_pad)  # Sequence location (where the cell is placed)
                 midioutchan_val = '0'
             elif seq_mode == 'Keys':
                 seqstepmode_val = '0'  # Keys mode
@@ -1699,6 +2026,10 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
             
             # Add sequence element with events
             sequence = ET.SubElement(cell, 'sequence')
+            # DEBUG: Log which track's notes are being written
+            if sublayer_events and sublayer_idx == 0:
+                first_strtks = sublayer_events[0].get('strtks', 'N/A')
+                logger.info(f'  Track {track_idx}, Sub-layer {sublayer_idx}: Writing {len(sublayer_events)} events to cell at row={sequence_row}, col={sequence_column}, seqpadmapdest={seqpadmapdest_val}, first_strtks={first_strtks}')
             for event_data in sublayer_events:
                 seqevent = ET.SubElement(sequence, 'seqevent')
                 seqevent.attrib = {
@@ -1716,12 +2047,14 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=False):
                     seqevent.attrib['velocity'] = str(event_data['velocity'])
             
             if sublayer_events:
-                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {len(sublayer_events)} notes')
+                # Debug: Log first note's strtks to verify we have the right notes
+                first_strtks = sublayer_events[0].get('strtks', 'N/A') if sublayer_events else 'N/A'
+                logger.info(f'    Sub-layer {chr(65+sublayer_idx)}: {len(sublayer_events)} notes (first strtks={first_strtks})')
         
         if total_notes_all_layers > 0:
-            logger.info(f'  Sequence {pad_num}: Created 4 sub-layers ({total_notes_all_layers} total notes)')
+            logger.info(f'  Sequence at pad {sequence_location_pad}: Created 4 sub-layers ({total_notes_all_layers} total notes)')
         else:
-            logger.debug(f'  Sequence {pad_num}: No MIDI clips found')
+            logger.debug(f'  Sequence at pad {sequence_location_pad}: No MIDI clips found')
     
     logger.info(f'Sequence extraction complete')
     return session
@@ -1878,7 +2211,7 @@ def main(args):
         logger.info(f'The project tempo is: {tempo} bpm')
         
         logger.info('Extracting track data...')
-        pad_list, midi_tracks = track_iterator(tracks)
+        pad_list, midi_tracks, midi_track_info = track_iterator(tracks)
         
         if not pad_list:
             logger.error('Failed to extract drum rack. Aborting.')
@@ -1897,7 +2230,7 @@ def main(args):
         session, assets = make_drum_rack_pads(session, pad_list, tempo)
         
         # Create sequences from MIDI tracks
-        session = make_drum_rack_sequences(session, midi_tracks, pad_list, unquantised=args.unquantised)
+        session = make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info, unquantised=args.unquantised)
         
         # Add song, FX, and master sections
         bb_root = make_song(bb_root)
@@ -1965,10 +2298,18 @@ if __name__ == '__main__':
                                      formatter_class=RawTextHelpFormatter)
     parser.add_argument("-i", "--Input", help="Ableton live project input (.als file)", type=str, required=True)
     parser.add_argument("-o", "--Output", help="BB project name and location (directory path)", type=str, required=True)
+    parser.add_argument("-V", "--Version", help="3-digit version number (e.g., 001, 002) - appends to output path", type=str, default=None)
     parser.add_argument("-m", "--Manual", help="Manual sample extraction (don't copy samples)", action='store_true')
     parser.add_argument("-u", "--unquantised", help="Unquantised MIDI timing (precise timing, not grid-locked)", action='store_true')
     parser.add_argument("-v", "--verbose", help="Verbose output", action='store_true')
     args = parser.parse_args()
+    
+    # Validate and append version to output path if provided
+    if args.Version:
+        if not args.Version.isdigit() or len(args.Version) != 3:
+            logger.error(f'Version must be a 3-digit number (e.g., 001, 002), got: {args.Version}')
+            sys.exit(1)
+        args.Output = os.path.join(args.Output, f'v{args.Version}')
     
     if args.verbose:
         logger.setLevel(logging.DEBUG)

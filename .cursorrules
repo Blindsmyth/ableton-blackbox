@@ -1,0 +1,40 @@
+# Cursor Rules for Ableton to Blackbox Converter
+
+## Context Files to Read
+Before making changes to sequence timing, step length, or sequence location logic, you MUST read these context files:
+
+1. **docs/SEQUENCE_TIMING_WORKFLOW.md** - Complete workflow for step_len and step_count calculation
+2. **reference/preset 2.xml** - Reference file showing correct output format
+3. **docs/BLACKBOX_TECHNICAL_REFERENCE.md** - Blackbox technical specifications
+
+## Key Rules
+
+### Step Length Detection
+- **ALWAYS default to step_len=10 (1/16 notes)** unless notes actually require finer resolution
+- Only use step_len=14 (1/32) if notes fall on "odd" 32nd note positions (0.125, 0.375, 0.625, 0.875 beats)
+- Notes at whole beats (0.0, 1.0, 2.0, etc.) should use 1/16, not 1/32
+
+### Step Values
+- Step values MUST match the step_len resolution
+- If step_len=10 (1/16): step = time_val * 4
+- If step_len=14 (1/32): step = time_val * 8
+- Mismatched step values cause tempo issues (e.g., 4x speed)
+
+### Sequence Location
+- Sequence location (row/column) ALWAYS matches track index
+- Track 0 → pad 0 location, Track 1 → pad 1 location, etc.
+- This applies to BOTH Pads mode and Keys mode
+- The seqpadmapdest parameter determines which pad plays, not where the sequence is located
+
+### Unquantised Sequences
+- Use 960 ticks per beat (not 3840)
+- Set lencount=0
+- Step values still calculated based on step_len (default 1/16)
+
+## When Making Changes
+1. Read the context files listed above
+2. Check the reference file (preset 2.xml) for expected output
+3. Test with versioning (-V flag) to track changes
+4. Verify step values match step_len resolution
+5. Verify sequence locations match track indices
+
