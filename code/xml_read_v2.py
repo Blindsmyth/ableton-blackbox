@@ -2077,11 +2077,19 @@ def make_drum_rack_sequences(session, midi_tracks, pad_list, midi_track_info=Non
             params = ET.SubElement(cell, 'params')
             
             # Set parameters based on sequence mode
-            # CRITICAL: For Keys mode, seqstepmode depends on quantisation state
+            # CRITICAL: For both Keys and Pads modes, seqstepmode depends on quantisation state
             # - Quantised Keys mode: seqstepmode="1" with chan=256+target_pad (matches sequence 5 reference)
             # - Unquantised Keys mode: seqstepmode="0" with chan=256 (matches sequence 8 reference)
+            # - Quantised Pads mode: seqstepmode="1" (standard pads mode)
+            # - Unquantised Pads mode: seqstepmode="0" (matches reference/preset reference seq 2 unquantised pads.xml)
             if seq_mode == 'Pads':
-                seqstepmode_val = '1'  # Pads mode
+                # Check if this sublayer is unquantised
+                if is_unquantised:
+                    # Unquantised Pads mode: use seqstepmode="0" (matches reference)
+                    seqstepmode_val = '0'
+                else:
+                    # Quantised Pads mode: use seqstepmode="1" (standard pads mode)
+                    seqstepmode_val = '1'
                 seqpadmapdest_val = str(sequence_location_pad)  # Sequence location (where the cell is placed)
                 midioutchan_val = '0'
             elif seq_mode == 'Keys':
@@ -2413,8 +2421,9 @@ if __name__ == '__main__':
     
     # Validate and append version to output path if provided
     if args.Version:
-        if not args.Version.isdigit() or len(args.Version) != 3:
-            logger.error(f'Version must be a 3-digit number (e.g., 001, 002), got: {args.Version}')
+        # Allow "exception" as a special version name, otherwise validate as 3-digit number
+        if args.Version != "exception" and (not args.Version.isdigit() or len(args.Version) != 3):
+            logger.error(f'Version must be a 3-digit number (e.g., 001, 002) or "exception", got: {args.Version}')
             sys.exit(1)
         args.Output = os.path.join(args.Output, f'v{args.Version}')
     elif git_version:
