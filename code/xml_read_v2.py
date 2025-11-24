@@ -688,6 +688,183 @@ def detect_warped_stem(device):
         return result
 
 
+def extract_transpose_cents(device):
+    """
+    Extract Simpler transpose (in cents) from the Pitch section.
+    Returns int cents (semitones * 100).
+    """
+    try:
+        pitch_section = find_element_by_tag(device, 'Pitch')
+        if pitch_section is None:
+            return 0
+        
+        transpose_key = find_element_by_tag(pitch_section, 'TransposeKey')
+        if transpose_key is None:
+            return 0
+        
+        manual = find_element_by_tag(transpose_key, 'Manual')
+        if manual is None:
+            return 0
+        
+        value = manual.attrib.get('Value')
+        if value is None:
+            return 0
+        
+        transpose_semitones = float(value)
+        return int(round(transpose_semitones * 100))
+    except Exception as e:
+        logger.debug(f'  extract_transpose_cents failed: {e}')
+        return 0
+
+
+def _collect_slice_points(sample_part):
+    """
+    Locate slice definitions inside a Simpler sample part.
+    Returns tuple: (source_tag, seconds_list, samples_list)
+    """
+    slice_tags = [
+        'ManualSlicePoints',
+        'SlicePoints',
+        'RegionSlicePoints',
+        'BeatSlicePoints',
+        'InitialSlicePointsFromOnsets'
+    ]
+    
+    def _parse_container(container):
+        seconds = []
+        samples = []
+        for point in list(container):
+            attrib = point.attrib
+            if 'TimeInSeconds' in attrib:
+                try:
+                    seconds.append(float(attrib['TimeInSeconds']))
+                    continue
+                except ValueError:
+                    pass
+            if 'Time' in attrib:
+                try:
+                    seconds.append(float(attrib['Time']))
+                    continue
+                except ValueError:
+                    pass
+            for key in ('SampleIndex', 'Samples', 'Sample'):
+                if key in attrib:
+                    try:
+                        samples.append(int(round(float(attrib[key]))))
+                        break
+                    except ValueError:
+                        pass
+        return seconds, samples
+    
+    for tag in slice_tags:
+        container = find_element_by_tag(sample_part, tag)
+        if container is not None and len(container):
+            seconds, samples = _parse_container(container)
+            if seconds or samples:
+                return tag, seconds, samples
+    
+    # Fallback: use transient onsets if nothing else is set
+    warp_props = find_element_by_tag(sample_part, 'SampleWarpProperties')
+    if warp_props is not None:
+        user_onsets = warp_props.find('.//UserOnsets')
+        if user_onsets is not None and len(user_onsets):
+            seconds = []
+            for onset in list(user_onsets):
+                attrib = onset.attrib
+                if 'Time' in attrib:
+                    try:
+                        seconds.append(float(attrib['Time']))
+                    except ValueError:
+                        continue
+            if seconds:
+                return 'UserOnsets', seconds, []
+    return None, [], []
+
+
+def extract_slicing_info(device, sample_part):
+    """
+    Gather slicing-related metadata from a Simpler device.
+    Returns dict with slice positions (samples), beat grid, playback mode, etc.
+    """
+    info = {
+        'has_slices': False,
+        'slice_positions_samples': [],
+        'slice_times_seconds': [],
+        'slice_source': None,
+        'default_sample_rate': None,
+        'default_duration_samples': None,
+        'slicing_style': None,
+        'slicing_playback_mode': None,
+        'playthrough': False,
+        'beat_grid': None,
+        'transpose_cents': extract_transpose_cents(device)
+    }
+    
+    if device is None or sample_part is None:
+        return info
+    
+    try:
+        sample_ref = find_element_by_tag(sample_part, 'SampleRef')
+        if sample_ref is not None:
+            duration_elem = find_element_by_tag(sample_ref, 'DefaultDuration')
+            if duration_elem is not None and 'Value' in duration_elem.attrib:
+                try:
+                    info['default_duration_samples'] = int(round(float(duration_elem.attrib['Value'])))
+                except ValueError:
+                    pass
+            
+            rate_elem = find_element_by_tag(sample_ref, 'DefaultSampleRate')
+            if rate_elem is not None and 'Value' in rate_elem.attrib:
+                try:
+                    info['default_sample_rate'] = float(rate_elem.attrib['Value'])
+                except ValueError:
+                    pass
+        
+        # Record slicing parameters stored on the sample part
+        style_elem = find_element_by_tag(sample_part, 'SlicingStyle')
+        if style_elem is not None and 'Value' in style_elem.attrib:
+            info['slicing_style'] = style_elem.attrib['Value']
+        
+        beat_grid_elem = find_element_by_tag(sample_part, 'SlicingBeatGrid')
+        if beat_grid_elem is not None and 'Value' in beat_grid_elem.attrib:
+            info['beat_grid'] = beat_grid_elem.attrib['Value']
+        
+        source_tag, seconds, samples = _collect_slice_points(sample_part)
+        if source_tag:
+            info['slice_source'] = source_tag
+            info['has_slices'] = True
+            if seconds:
+                info['slice_times_seconds'] = seconds
+            if samples:
+                info['slice_positions_samples'].extend(samples)
+            if seconds and info['default_sample_rate']:
+                positions = [int(round(sec * info['default_sample_rate'])) for sec in seconds]
+                info['slice_positions_samples'].extend(positions)
+        
+        # Read slicing playback mode (Mono/Poly/Thru)
+        simpler_slicing = find_element_by_tag(device, 'SimplerSlicing')
+        if simpler_slicing is not None:
+            playback_mode_elem = find_element_by_tag(simpler_slicing, 'PlaybackMode')
+            if playback_mode_elem is not None and 'Value' in playback_mode_elem.attrib:
+                try:
+                    playback_mode = int(playback_mode_elem.attrib['Value'])
+                except ValueError:
+                    playback_mode = None
+                info['slicing_playback_mode'] = playback_mode
+                info['playthrough'] = playback_mode == 2
+        
+        if info['slice_positions_samples']:
+            # Always include slice at index 0 for completeness
+            info['slice_positions_samples'].append(0)
+            cleaned = sorted(set(max(0, int(pos)) for pos in info['slice_positions_samples']))
+            info['slice_positions_samples'] = cleaned
+        
+        return info
+    except Exception as e:
+        logger.debug(f'  extract_slicing_info failed: {e}')
+        return info
+
+
 def sampler_extract(device):
     """Extract sampler/simpler parameters with robust error handling."""
     params = {}
@@ -926,6 +1103,11 @@ def sampler_extract(device):
         else:
             first_part = sample_map[0]
         
+        # Extract slicing metadata + transpose
+        slicing_info = extract_slicing_info(device, first_part)
+        params['slicing'] = slicing_info
+        params['transpose_cents'] = slicing_info.get('transpose_cents', 0)
+        
         sample_start = None
         sample_end = None
         for child in first_part:
@@ -1120,6 +1302,7 @@ def make_drum_rack_pads(session, pad_list, tempo):
         pad_num = pad_info['blackbox_pad']
         row, column = row_column(pad_num)
         
+        slice_positions = []
         if not pad_info['is_empty'] and pad_info['simpler']:
             # Extract sample parameters from Simpler
             params = sampler_extract(pad_info['simpler'])
@@ -1237,9 +1420,15 @@ def make_drum_rack_pads(session, pad_list, tempo):
                 # Create params element
                 param_elem = ET.SubElement(cell, 'params')
                 
+                slicing_info = params.get('slicing', {}) or {}
+                has_slices = slicing_info.get('has_slices', False)
+                if has_slices:
+                    cellmode = '2'
+                    loopmode = '0'
+                
                 # For clip mode samples, use default envelope settings
                 # 0% attack, 100% decay, 100% sustain, 20% release
-                if cellmode == '1':  # Clip mode
+                if cellmode == '1' or has_slices:
                     env_attack = '0'
                     env_decay = '1000'  # 100% = 1000
                     env_sustain = '1000'  # 100% = 1000
@@ -1268,7 +1457,52 @@ def make_drum_rack_pads(session, pad_list, tempo):
                     '0'   # polymode
                 )
                 param_attrib['chokegrp'] = choke_group
+                
+                transpose_cents = params.get('transpose_cents')
+                if transpose_cents is not None:
+                    try:
+                        param_attrib['pitch'] = str(int(transpose_cents))
+                    except (TypeError, ValueError):
+                        pass
+                
+                if has_slices:
+                    param_attrib['cellmode'] = '2'
+                    param_attrib['loopmode'] = '0'
+                    param_attrib['quantsize'] = '8'
+                    param_attrib['slicerquantsize'] = '8'
+                    param_attrib['playthru'] = '1' if slicing_info.get('playthrough') else '0'
+                    if warp_info.get('is_warped', False):
+                        param_attrib['synctype'] = '6'
+                        param_attrib['slicersync'] = '1'
+                    else:
+                        param_attrib['synctype'] = '5'
+                        param_attrib['slicersync'] = '0'
+                
                 param_elem.attrib = param_attrib
+                
+                if has_slices:
+                    default_rate = slicing_info.get('default_sample_rate')
+                    slice_positions = list(slicing_info.get('slice_positions_samples', []))
+                    if not slice_positions and slicing_info.get('slice_times_seconds'):
+                        rate = wav_info['sample_rate'] if wav_info else default_rate
+                        if rate:
+                            slice_positions = [int(round(sec * float(rate))) for sec in slicing_info['slice_times_seconds']]
+                    if slice_positions and wav_info and default_rate and default_rate > 0:
+                        try:
+                            if float(default_rate) != float(wav_info['sample_rate']):
+                                scale = float(wav_info['sample_rate']) / float(default_rate)
+                                slice_positions = [int(round(pos * scale)) for pos in slice_positions]
+                        except (TypeError, ValueError):
+                            pass
+                    if slice_positions:
+                        if 0 not in slice_positions:
+                            slice_positions.append(0)
+                        try:
+                            samlen_int = int(float(samlen))
+                            slice_positions = [max(0, min(int(pos), samlen_int)) for pos in slice_positions]
+                        except (TypeError, ValueError):
+                            slice_positions = [max(0, int(pos)) for pos in slice_positions]
+                        slice_positions = sorted(set(slice_positions))
                 
                 # Handle multisample mode
                 if params.get('multisammode') == '1':
@@ -1310,6 +1544,9 @@ def make_drum_rack_pads(session, pad_list, tempo):
             param_elem.attrib['chokegrp'] = '0'
         
         slices = ET.SubElement(cell, 'slices')
+        if slice_positions:
+            for pos in slice_positions:
+                ET.SubElement(slices, 'slice', {'pos': str(pos)})
     
     logger.info(f'Created {len(pad_list)} drum rack pads')
     return session, assets

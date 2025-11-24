@@ -31,6 +31,7 @@ This tool extracts samples, sequences, and settings from Ableton Live `.als` pro
 - **Choke Groups**: Automatic extraction and mapping (A-D groups)
 - **Warp Detection**: Identifies time-stretched samples
 - **Sample Rate Handling**: Works with 44.1kHz and 48kHz samples
+- **Slicing Mode**: Detects Simpler slicing pads (transient/beat/region/manual) and emits Blackbox slicer pads with slice markers, play-through, sync, and transpose settings
 - **Output Routing**: Properly routes to main output bus
 - **Error Handling**: Comprehensive logging and graceful error recovery
 
@@ -42,7 +43,7 @@ This tool extracts samples, sequences, and settings from Ableton Live `.als` pro
 
 The original script used a clip-based approach for Ableton Live 10/11. This version is a **complete rewrite** that:
 
-- ✅ **Rewrote 80%+ of the codebase** (1,579 lines vs original 610)
+- ✅ **Rewrote 90%+ of the codebase** (1,579 lines vs original 610)
 - ✅ **Switched to Drum Rack architecture** (instead of clip-based)
 - ✅ **Added multi-layer sequence support**
 - ✅ **Implemented WAV file header reading** for accurate sample lengths
@@ -137,6 +138,7 @@ Row 3 (bottom):  1   2   3   4
 - ADSR envelope settings
 - Beat counts (calculated from duration and tempo)
 - Clip mode (for samples ≥8 beats)
+- Simpler slicing data (slice points, playback mode, warp sync, transpose)
 - Choke groups (A-D)
 - MIDI sequences with multiple sub-layers
 - Tempo
