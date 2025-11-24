@@ -176,11 +176,24 @@ See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflo
 
 ### Output Routing for MIDI Sequences
 
-For MIDI sequences to work correctly, you need to configure output routing in Ableton:
+For MIDI sequences to work correctly, you need to configure output routing in Ableton. The routing determines which Blackbox mode the sequences will use:
+
+**Default (Pads Mode):**
+By default, MIDI tracks route to the whole Drum Rack, which results in **Pads mode** in Blackbox:
+
+![Output Routing - Defaults to the whole Drum Rack, this will do Pads mode](docs/Screenshot-outputroutingdefaultstothewholedrumrack-thiswilldo%20Pads%20mode.png)
+
+*Default output routing routes to the entire Drum Rack, resulting in Pads mode conversion.*
+
+**Keys Mode:**
+To enable **Keys mode** (for triggering specific pads with sequences), change the output routing to target a specific chain/branch:
 
 ![Output Routing - Change sequence to pad mapping and enable Keys mode](docs/Screenshot-outputrouting-changeseqtopadmappingandenablekeysmode.png)
 
 *Configure output routing to change sequence to pad mapping and enable Keys mode for proper MIDI sequence conversion.*
+
+**External MIDI Mode:**
+For external MIDI routing:
 
 ![Output Routing - Change to external MIDI mode](docs/Screenshot-outputrouting%20for%20chaning%20to%20external%20midi%20mode.png)
 
