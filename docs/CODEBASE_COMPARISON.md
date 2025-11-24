@@ -5,7 +5,7 @@
 ## Overview
 
 **Original (`xml_read.py`)**: 610 lines, 26 functions  
-**Current (`xml_read_v2.py`)**: 2,675 lines, 34 functions
+**Current (`xml_read.py`)**: 2,675 lines, 34 functions
 
 **Growth**: 4.4x larger codebase, 8 additional functions, complete architectural rewrite
 

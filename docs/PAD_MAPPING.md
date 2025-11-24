@@ -91,7 +91,7 @@ Audio Track 16       →      Pad 16 (top-right)
 
 ## The Code
 
-Here's the relevant part from `xml_read_v2.py`:
+Here's the relevant part from `xml_read.py`:
 
 ```python
 def make_pads(from_ableton, clips, tempo):
@@ -216,7 +216,7 @@ cat output/preset.xml | grep '<cell' | grep 'layer="0"' | head -16
 Or use verbose mode to see what's being mapped:
 
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v
+python3 xml_read.py -i "project.als" -o "output" -m -v
 ```
 
 Look for lines like:
@@ -255,6 +255,6 @@ The script fills pads in order: **Simpler/Sampler first, then Audio clips, then 
 
 ---
 
-*See `xml_read_v2.py` lines 584-720 for the exact implementation.*
+*See `xml_read.py` lines 584-720 for the exact implementation.*
 
 

@@ -8,7 +8,7 @@ Your Ableton to Blackbox converter script has been **fully upgraded** to work wi
 The original script (`xml_read.py`) used hardcoded array indices to navigate Ableton's XML structure. When Ableton Live 12 changed the internal file format, these indices broke, causing the script to crash.
 
 ### The Solution Is...
-A completely refactored version (`xml_read_v2.py`) that uses **tag-based XML navigation** instead of hardcoded indices. This makes it robust and future-proof!
+A completely refactored version (`xml_read.py`) that uses **tag-based XML navigation** instead of hardcoded indices. This makes it robust and future-proof!
 
 ## 🚀 Quick Start (3 Steps)
 
@@ -22,7 +22,7 @@ python3 --version
 ```bash
 cd "/Users/simon/Dropbox/Blackbox Stuff/ableton_blackbox/code"
 
-python3 xml_read_v2.py \
+python3 xml_read.py \
   -i "../../Ableton Files/An mir Vorbei Project/An mir Vorbei.als" \
   -o "../../output/An_mir_Vorbei_BB" \
   -m
@@ -93,7 +93,7 @@ python3 --version  # Should show 3.11+ or 3.12+
 ### Debugging
 Always start with manual + verbose mode:
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v
+python3 xml_read.py -i "project.als" -o "output" -m -v
 ```
 
 ## 📊 Test Results
@@ -115,8 +115,7 @@ python3 xml_read_v2.py -i "project.als" -o "output" -m -v
 ```
 ableton_blackbox/
 ├── code/
-│   ├── xml_read.py       # Original (v0.2)
-│   └── xml_read_v2.py    # Enhanced (v0.3) ← Use this!
+│   └── xml_read.py       # Main converter script ← Use this!
 ├── data/
 │   ├── test_output_v2/   # Test results (Live 12)
 │   └── hack_test/        # Test results (Live 11)
@@ -133,12 +132,12 @@ ableton_blackbox/
 **Basic conversion:**
 ```bash
 cd code
-python3 xml_read_v2.py -i "path/to/project.als" -o "../output/project_bb" -m
+python3 xml_read.py -i "path/to/project.als" -o "../output/project_bb" -m
 ```
 
 **With verbose logging:**
 ```bash
-python3 xml_read_v2.py -i "path/to/project.als" -o "../output/project_bb" -m -v
+python3 xml_read.py -i "path/to/project.als" -o "../output/project_bb" -m -v
 ```
 
 **View examples:**
@@ -181,13 +180,13 @@ You'll know it's working when:
 
 ```bash
 # Test if script works
-python3 xml_read_v2.py -h
+python3 xml_read.py -h
 
 # Convert project (test mode)
-python3 xml_read_v2.py -i "project.als" -o "output" -m
+python3 xml_read.py -i "project.als" -o "output" -m
 
 # Convert with debug info
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v
+python3 xml_read.py -i "project.als" -o "output" -m -v
 
 # Check output
 ls -la output/

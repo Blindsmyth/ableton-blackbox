@@ -123,7 +123,7 @@ By default, the converter:
 
 Use `-m` flag to skip automatic copying:
 ```bash
-python3 code/xml_read_v2.py -i project.als -o output -m
+python3 code/xml_read.py -i project.als -o output -m
 ```
 
 **Use when**:
@@ -271,7 +271,7 @@ The converter automatically detects warped samples by checking:
 ### Step 2: Run Conversion
 
 ```bash
-python3 code/xml_read_v2.py -i "project.als" -o "output_folder"
+python3 code/xml_read.py -i "project.als" -o "output_folder"
 ```
 
 **Options**:

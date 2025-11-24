@@ -16,7 +16,7 @@ PROJECTS_DIR="$BASE_DIR/Ableton Files"
 # Example 1: Convert "An mir Vorbei" project
 echo -e "${YELLOW}Example 1: Converting 'An mir Vorbei' (Ableton 12 project)${NC}"
 echo "Command:"
-echo "python3 xml_read_v2.py \\"
+echo "python3 xml_read.py \\"
 echo "  -i \"$PROJECTS_DIR/An mir Vorbei Project/An mir Vorbei.als\" \\"
 echo "  -o \"$BASE_DIR/ableton_blackbox/data/An_mir_Vorbei_BB\" \\"
 echo "  -m"
@@ -24,12 +24,12 @@ echo ""
 
 # Uncomment to actually run:
 # cd "$SCRIPT_DIR"
-# python3 xml_read_v2.py -i "$PROJECTS_DIR/An mir Vorbei Project/An mir Vorbei.als" -o "$BASE_DIR/ableton_blackbox/data/An_mir_Vorbei_BB" -m
+# python3 xml_read.py -i "$PROJECTS_DIR/An mir Vorbei Project/An mir Vorbei.als" -o "$BASE_DIR/ableton_blackbox/data/An_mir_Vorbei_BB" -m
 
 # Example 2: Convert "Hack Into Your Soul" project
 echo -e "${YELLOW}Example 2: Converting 'Hack Into Your Soul' (Ableton 11 project)${NC}"
 echo "Command:"
-echo "python3 xml_read_v2.py \\"
+echo "python3 xml_read.py \\"
 echo "  -i \"$PROJECTS_DIR/Hack Into Your Soul/Hack into Your Soul Blackbox Export Project/Hack into Your Soul Blackbox Export.als\" \\"
 echo "  -o \"$BASE_DIR/ableton_blackbox/data/Hack_Into_Your_Soul_BB\" \\"
 echo "  -m"
@@ -37,12 +37,12 @@ echo ""
 
 # Uncomment to actually run:
 # cd "$SCRIPT_DIR"
-# python3 xml_read_v2.py -i "$PROJECTS_DIR/Hack Into Your Soul/Hack into Your Soul Blackbox Export Project/Hack into Your Soul Blackbox Export.als" -o "$BASE_DIR/ableton_blackbox/data/Hack_Into_Your_Soul_BB" -m
+# python3 xml_read.py -i "$PROJECTS_DIR/Hack Into Your Soul/Hack into Your Soul Blackbox Export Project/Hack into Your Soul Blackbox Export.als" -o "$BASE_DIR/ableton_blackbox/data/Hack_Into_Your_Soul_BB" -m
 
 # Example 3: Convert with verbose output for debugging
 echo -e "${YELLOW}Example 3: Verbose mode for debugging${NC}"
 echo "Command:"
-echo "python3 xml_read_v2.py \\"
+echo "python3 xml_read.py \\"
 echo "  -i \"$PROJECTS_DIR/An mir Vorbei Project/An mir Vorbei.als\" \\"
 echo "  -o \"$BASE_DIR/ableton_blackbox/data/An_mir_Vorbei_BB_verbose\" \\"
 echo "  -m -v 2>&1 | tee conversion_log.txt"
@@ -56,7 +56,7 @@ echo "#!/bin/bash"
 echo "for project in \"$PROJECTS_DIR\"/*.als; do"
 echo "    name=\$(basename \"\$project\" .als)"
 echo "    echo \"Converting: \$name\""
-echo "    python3 xml_read_v2.py -i \"\$project\" -o \"$BASE_DIR/ableton_blackbox/data/BB_\$name\" -m"
+echo "    python3 xml_read.py -i \"\$project\" -o \"$BASE_DIR/ableton_blackbox/data/BB_\$name\" -m"
 echo "done"
 echo ""
 
@@ -66,7 +66,7 @@ echo "# Try original script (will likely fail on Live 12):"
 echo "python3 xml_read.py -i \"project.als\" -o \"output_v2\" -m"
 echo ""
 echo "# Try enhanced script (should work):"
-echo "python3 xml_read_v2.py -i \"project.als\" -o \"output_v3\" -m"
+echo "python3 xml_read.py -i \"project.als\" -o \"output_v3\" -m"
 echo ""
 
 # Example 6: Test with one of the Blackbox presets that were converted

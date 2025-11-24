@@ -107,8 +107,6 @@ The original script used a clip-based approach for Ableton Live 10/11. This vers
 - ✅ **Added comprehensive documentation** and workflow guides
 - ✅ **Tested with Ableton Live 12.2/12.3**
 
-While the core concepts of XML parsing and parameter extraction were inspired by the original, the implementation is fundamentally different and built for modern Ableton Live workflows.
-
 ## Requirements
 
 - **Python 3.7+** (tested with Python 3.9+)
@@ -127,7 +125,7 @@ All dependencies are standard Python libraries (no external packages required):
 ### Basic Usage
 
 ```bash
-python3 code/xml_read_v2.py -i "path/to/your/project.als" -o "output/preset_name"
+python3 code/xml_read.py -i "path/to/your/project.als" -o "output/preset_name"
 ```
 
 ### Options
@@ -141,7 +139,7 @@ python3 code/xml_read_v2.py -i "path/to/your/project.als" -o "output/preset_name
 
 ```bash
 cd ableton_blackbox
-python3 code/xml_read_v2.py -i "../Ableton Files/My Project.als" -o "../Presets/My_Preset"
+python3 code/xml_read.py -i "../Ableton Files/My Project.als" -o "../Presets/My_Preset"
 ```
 
 This will create:

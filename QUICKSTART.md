@@ -12,7 +12,7 @@ python3 --version
 ### Step 2: Test the Script
 ```bash
 cd "/Users/simon/Dropbox/Blackbox Stuff/ableton_blackbox/code"
-python3 xml_read_v2.py -h
+python3 xml_read.py -h
 ```
 You should see the help message.
 
@@ -20,7 +20,7 @@ You should see the help message.
 
 #### For stem-based projects (audio clips):
 ```bash
-python3 xml_read_v2.py \
+python3 xml_read.py \
   -i "../../Ableton Files/Hack Into Your Soul/Hack into Your Soul Blackbox Export Project/Hack into Your Soul Blackbox Export.als" \
   -o "../../test_output" \
   -m
@@ -28,7 +28,7 @@ python3 xml_read_v2.py \
 
 #### For projects with Simpler/Sampler:
 ```bash
-python3 xml_read_v2.py \
+python3 xml_read.py \
   -i "/path/to/your/project.als" \
   -o "/path/to/output" \
   -m
@@ -60,7 +60,7 @@ You should see:
 # 1. In Ableton: Bounce each track to audio
 # 2. Create a new project with just the audio clips
 # 3. Convert:
-python3 xml_read_v2.py -i "MySong_Stems.als" -o "BB_MySong"
+python3 xml_read.py -i "MySong_Stems.als" -o "BB_MySong"
 
 # 4. Copy BB_MySong folder to Blackbox SD card
 ```
@@ -72,10 +72,10 @@ python3 xml_read_v2.py -i "MySong_Stems.als" -o "BB_MySong"
 # 1. Make sure your Simpler/Sampler tracks are not grouped
 # 2. Ensure samples are .wav format
 # 3. Convert:
-python3 xml_read_v2.py -i "MyInstrument.als" -o "BB_MyInstrument"
+python3 xml_read.py -i "MyInstrument.als" -o "BB_MyInstrument"
 
 # 4. Check what was extracted (verbose mode):
-python3 xml_read_v2.py -i "MyInstrument.als" -o "BB_MyInstrument" -v
+python3 xml_read.py -i "MyInstrument.als" -o "BB_MyInstrument" -v
 ```
 
 ### Workflow 3: MIDI Pattern Transfer
@@ -85,7 +85,7 @@ python3 xml_read_v2.py -i "MyInstrument.als" -o "BB_MyInstrument" -v
 # 1. Create MIDI clips in Session View
 # 2. Make sure they're in Simpler/Sampler tracks
 # 3. Convert:
-python3 xml_read_v2.py -i "MyPatterns.als" -o "BB_MyPatterns" -v
+python3 xml_read.py -i "MyPatterns.als" -o "BB_MyPatterns" -v
 
 # The -v flag shows which sequences were extracted
 ```
@@ -99,7 +99,7 @@ python3 xml_read_v2.py -i "MyPatterns.als" -o "BB_MyPatterns" -v
 **Solution:** 
 ```bash
 # Use -m flag and manually copy samples
-python3 xml_read_v2.py -i "project.als" -o "output" -m
+python3 xml_read.py -i "project.als" -o "output" -m
 cp /path/to/samples/*.wav output/
 ```
 
@@ -109,7 +109,7 @@ cp /path/to/samples/*.wav output/
 **Solution:**
 1. Use verbose mode to see what's detected:
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep "Sample"
+python3 xml_read.py -i "project.als" -o "output" -m -v | grep "Sample"
 ```
 
 2. Manually copy the right samples to the output folder
@@ -117,7 +117,7 @@ python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep "Sample"
 ### Problem: Wrong tempo
 **Check:** Look in the verbose output for "Found tempo"
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep tempo
+python3 xml_read.py -i "project.als" -o "output" -m -v | grep tempo
 ```
 
 ## What Gets Converted?
@@ -174,19 +174,19 @@ python3 --version  # Should be 3.11+ now
 
 ```bash
 # Basic conversion
-python3 xml_read_v2.py -i "project.als" -o "output"
+python3 xml_read.py -i "project.als" -o "output"
 
 # Test mode (no sample copying)
-python3 xml_read_v2.py -i "project.als" -o "output" -m
+python3 xml_read.py -i "project.als" -o "output" -m
 
 # Debug mode (verbose)
-python3 xml_read_v2.py -i "project.als" -o "output" -v
+python3 xml_read.py -i "project.als" -o "output" -v
 
 # Full debug with manual samples
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v
+python3 xml_read.py -i "project.als" -o "output" -m -v
 
 # Show help
-python3 xml_read_v2.py -h
+python3 xml_read.py -h
 ```
 
 ## Next Steps

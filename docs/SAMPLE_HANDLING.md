@@ -120,7 +120,7 @@ output_folder/
 ### Without `-m` (Default - Auto Copy)
 
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output"
+python3 xml_read.py -i "project.als" -o "output"
 ```
 
 **What happens:**
@@ -135,7 +135,7 @@ python3 xml_read_v2.py -i "project.als" -o "output"
 ### With `-m` (Manual - No Copy)
 
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m
+python3 xml_read.py -i "project.als" -o "output" -m
 ```
 
 **What happens:**
@@ -157,7 +157,7 @@ python3 xml_read_v2.py -i "project.als" -o "output" -m
 
 ```bash
 # 1. Convert with auto-copy
-python3 xml_read_v2.py -i "MySong.als" -o "BB_MySong"
+python3 xml_read.py -i "MySong.als" -o "BB_MySong"
 
 # 2. Check what was copied
 ls -la BB_MySong/
@@ -172,7 +172,7 @@ cp -r BB_MySong /Volumes/BLACKBOX/Presets/
 
 ```bash
 # 1. Try with manual flag first to see what's needed
-python3 xml_read_v2.py -i "MySong.als" -o "BB_MySong" -m -v
+python3 xml_read.py -i "MySong.als" -o "BB_MySong" -m -v
 
 # Output will show:
 # INFO: Sample filepath: /Users/old_location/kick.wav
@@ -193,7 +193,7 @@ cp ~/Music/Samples/snare.wav BB_MySong/
 # Your path: /Users/you/Music/kick.wav
 
 # 1. Use manual flag
-python3 xml_read_v2.py -i "FriendsSong.als" -o "BB_FriendsSong" -m -v
+python3 xml_read.py -i "FriendsSong.als" -o "BB_FriendsSong" -m -v
 
 # 2. Look at the verbose output to see which samples are needed:
 # INFO: Sample filepath: /Users/friend/Music/kick.wav
@@ -212,7 +212,7 @@ cp ~/Music/Samples/snare.wav BB_FriendsSong/
 # Samples on external drive that might not always be connected
 
 # 1. Convert with auto-copy while drive is connected
-python3 xml_read_v2.py -i "project.als" -o "BB_Project"
+python3 xml_read.py -i "project.als" -o "BB_Project"
 
 # 2. Disconnect external drive
 # 3. Output folder has all samples copied locally
@@ -236,7 +236,7 @@ cat output/preset.xml | grep 'filename=' | grep -v 'filename=""'
 ### Use Verbose Mode to See Source Paths
 
 ```bash
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep "filepath"
+python3 xml_read.py -i "project.als" -o "output" -m -v | grep "filepath"
 
 # Example output:
 # INFO: Sample filepath: /Users/simon/Music/Samples/kick.wav
@@ -280,7 +280,7 @@ python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep "filepath"
 **Solution:**
 ```bash
 # Option 1: Use manual mode and copy samples yourself
-python3 xml_read_v2.py -i "project.als" -o "output" -m
+python3 xml_read.py -i "project.als" -o "output" -m
 cp /correct/path/to/samples/*.wav output/
 
 # Option 2: In Ableton, use "Collect All and Save"
@@ -314,7 +314,7 @@ cp /correct/path/to/samples/*.wav output/
 # If so, samples need to be copied manually
 
 # Check what samples are needed:
-python3 xml_read_v2.py -i "project.als" -o "output" -m -v | grep "Sample"
+python3 xml_read.py -i "project.als" -o "output" -m -v | grep "Sample"
 ```
 
 ## Best Practices

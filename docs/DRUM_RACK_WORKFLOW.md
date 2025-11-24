@@ -2,7 +2,7 @@
 
 ## Overview
 
-The enhanced `xml_read_v2.py` script now supports a **Drum Rack workflow** specifically designed for converting Ableton projects with a Drum Rack containing 16 Simplers to a Blackbox preset.
+The enhanced `xml_read.py` script now supports a **Drum Rack workflow** specifically designed for converting Ableton projects with a Drum Rack containing 16 Simplers to a Blackbox preset.
 
 ## What's New
 
@@ -83,13 +83,13 @@ Track 2-17: MIDI Tracks (for sequences)
 ### Basic Conversion
 
 ```bash
-python3 code/xml_read_v2.py -i "My Project.als" -o "output_folder"
+python3 code/xml_read.py -i "My Project.als" -o "output_folder"
 ```
 
 ### With Verbose Logging
 
 ```bash
-python3 code/xml_read_v2.py -i "My Project.als" -o "output_folder" -v
+python3 code/xml_read.py -i "My Project.als" -o "output_folder" -v
 ```
 
 ### Manual Sample Management
@@ -97,7 +97,7 @@ python3 code/xml_read_v2.py -i "My Project.als" -o "output_folder" -v
 Use the `-m` flag to prevent automatic sample copying:
 
 ```bash
-python3 code/xml_read_v2.py -i "My Project.als" -o "output_folder" -m
+python3 code/xml_read.py -i "My Project.als" -o "output_folder" -m
 ```
 
 This is useful if your samples are already organized or in a different location.
@@ -106,7 +106,7 @@ This is useful if your samples are already organized or in a different location.
 
 ```bash
 cd "/Users/simon/Dropbox/Blackbox Stuff/ableton_blackbox"
-python3 code/xml_read_v2.py \
+python3 code/xml_read.py \
   -i "../Ableton Files/Test Project/Template.als" \
   -o "output_drum_rack" \
   -v
@@ -238,7 +238,7 @@ INFO: === Conversion complete! ===
 
 ## Files Modified
 
-- `code/xml_read_v2.py`: Main script with drum rack support
+- `code/xml_read.py`: Main script with drum rack support
 - All changes are backward compatible with the legacy workflow
 
 ## Version
