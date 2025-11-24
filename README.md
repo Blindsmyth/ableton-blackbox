@@ -1,4 +1,4 @@
-# Ableton to Blackbox Converter
+# Als2Bb Converter
 
 A complete, production-ready converter for translating Ableton Live Drum Rack projects into 1010music Blackbox presets.
 
@@ -26,7 +26,7 @@ The template (`ableton_template/BB2ALS Template Project/BB2ALS Template.als`) is
   - Each track has 4 clip slots (A, B, C, D) representing sub-layers
   - Route MIDI from these tracks to the Drum Rack to trigger pads
 
-![Ableton Template Screenshot](docs/newscreesnshotfor%20ableton%20template..png)
+![Ableton Template Screenshot](docs/screenshots/newscreesnshotfor%20ableton%20template..png)
 
 *The template shows the 16 sequence tracks (Seq1-Seq16) and the Pads track with Drum Rack. Each sequence track has 4 clip slots (A-D) for sub-layers, and the Drum Rack contains 16 cells for your samples.*
 
@@ -78,7 +78,7 @@ The converter fully supports Ableton Simpler's slicing mode and converts it to B
 - **Beat Count**: Automatically calculates beat count from sample length (same as clip/stem extraction)
 - **Envelopes**: Uses the same envelope defaults as clip mode
 
-![Slicer Example - Playthrough mode: all transients in the clip are being extracted](docs/Screenshot-example-slicer-playthrough-notethatalltransientsthatareinthecliparebeingextracted!.png)
+![Slicer Example - Playthrough mode: all transients in the clip are being extracted](docs/screenshots/Screenshot-example-slicer-playthrough-notethatalltransientsthatareinthecliparebeingextracted!.png)
 
 *Example showing slicer mode with playthrough enabled. Note that all transients that are in the clip are being extracted as slice points.*
 
@@ -177,14 +177,14 @@ Your Ableton project should be set up as follows:
 **✅ Correct Order:**
 Chains should be in sequential order (0, 1, 2, 3, ...) matching the Blackbox pad layout:
 
-![Chains - Example for correct order](docs/chains,exampleforcorrectorder.png)
+![Chains - Example for correct order](docs/screenshots/chains,exampleforcorrectorder.png)
 
 *Correct chain order: chains are numbered sequentially and match the Blackbox pad layout.*
 
 **❌ Bad Order (Jammed):**
 If chains are out of order or jumbled, your pads will be mapped incorrectly:
 
-![Chains - Example of bad order that will result in jammed order](docs/chains-exampleofbadorderthatwill%20resultin%20jammed%20order.png)
+![Chains - Example of bad order that will result in jammed order](docs/screenshots/chains-exampleofbadorderthatwill%20resultin%20jammed%20order.png)
 
 *Bad chain order: chains are jumbled and out of sequence. This will cause incorrect pad mapping in the conversion!*
 
@@ -194,7 +194,7 @@ If chains are out of order or jumbled, your pads will be mapped incorrectly:
 3. Drag chains to reorder them if needed
 4. Verify the order matches your intended pad layout before converting
 
-See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflows.
+See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for complete details on pad mapping and workflows.
 
 ### Output Routing for MIDI Sequences
 
@@ -203,21 +203,21 @@ For MIDI sequences to work correctly, you need to configure output routing in Ab
 **Default (Pads Mode):**
 By default, MIDI tracks route to the whole Drum Rack, which results in **Pads mode** in Blackbox:
 
-![Output Routing - Defaults to the whole Drum Rack, this will do Pads mode](docs/Screenshot-outputroutingdefaultstothewholedrumrack-thiswilldo%20Pads%20mode.png)
+![Output Routing - Defaults to the whole Drum Rack, this will do Pads mode](docs/screenshots/Screenshot-outputroutingdefaultstothewholedrumrack-thiswilldo%20Pads%20mode.png)
 
 *Default output routing routes to the entire Drum Rack, resulting in Pads mode conversion.*
 
 **Keys Mode:**
 To enable **Keys mode** (for triggering specific pads with sequences), change the output routing to target a specific chain/branch:
 
-![Output Routing - Change sequence to pad mapping and enable Keys mode](docs/Screenshot-outputrouting-changeseqtopadmappingandenablekeysmode.png)
+![Output Routing - Change sequence to pad mapping and enable Keys mode](docs/screenshots/Screenshot-outputrouting-changeseqtopadmappingandenablekeysmode.png)
 
 *Configure output routing to change sequence to pad mapping and enable Keys mode for proper MIDI sequence conversion.*
 
 **External MIDI Mode:**
 For external MIDI routing:
 
-![Output Routing - Change to external MIDI mode](docs/Screenshot-outputrouting%20for%20chaning%20to%20external%20midi%20mode.png)
+![Output Routing - Change to external MIDI mode](docs/screenshots/Screenshot-outputrouting%20for%20chaning%20to%20external%20midi%20mode.png)
 
 *Output routing settings for changing to external MIDI mode.*
 
@@ -261,9 +261,9 @@ Row 3 (bottom):  1   2   3   4
 
 ## Documentation
 
-- **[WORKFLOWS.md](WORKFLOWS.md)** - Complete workflows guide (start here!)
 - **[QUICKSTART.md](QUICKSTART.md)** - Step-by-step guide for first-time users
-- **[DRUM_RACK_WORKFLOW.md](DRUM_RACK_WORKFLOW.md)** - Detailed Drum Rack workflow
+- **[docs/WORKFLOWS.md](docs/WORKFLOWS.md)** - Complete workflows guide
+- **[docs/DRUM_RACK_WORKFLOW.md](docs/DRUM_RACK_WORKFLOW.md)** - Detailed Drum Rack workflow
 - **[docs/SEQUENCE_TIMING_WORKFLOW.md](docs/SEQUENCE_TIMING_WORKFLOW.md)** - Detailed timing and quantization rules
 - **[docs/BLACKBOX_TECHNICAL_REFERENCE.md](docs/BLACKBOX_TECHNICAL_REFERENCE.md)** - Blackbox XML structure reference
 
@@ -271,7 +271,7 @@ Row 3 (bottom):  1   2   3   4
 
 This is an active project! If you find bugs or have feature requests:
 
-1. Check [WORKFLOWS.md](WORKFLOWS.md) troubleshooting section first
+1. Check [docs/WORKFLOWS.md](docs/WORKFLOWS.md) troubleshooting section first
 2. Open an issue on GitHub with:
    - Ableton Live version
    - Blackbox firmware version
