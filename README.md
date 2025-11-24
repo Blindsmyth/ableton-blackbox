@@ -26,7 +26,7 @@ The template (`ableton_template/BB2ALS Template Project/BB2ALS Template.als`) is
   - Each track has 4 clip slots (A, B, C, D) representing sub-layers
   - Route MIDI from these tracks to the Drum Rack to trigger pads
 
-![Ableton Template Screenshot](ableton_template/BB2ALS%20Template%20Project/Screenshot-Ableton.png)
+![Ableton Template Screenshot](docs/newscreesnshotfor%20ableton%20template..png)
 
 *The template shows the 16 sequence tracks (Seq1-Seq16) and the Pads track with Drum Rack. Each sequence track has 4 clip slots (A-D) for sub-layers, and the Drum Rack contains 16 cells for your samples.*
 
@@ -171,6 +171,28 @@ Your Ableton project should be set up as follows:
 - Chain 3 → Blackbox Pad 4 (bottom-right)
 - Chain 4 → Blackbox Pad 5
 - ... and so on
+
+**⚠️ Critical Warning**: The order of chains can get jumbled in Ableton, which will completely mess up your conversion! Always verify the chain order before converting.
+
+**✅ Correct Order:**
+Chains should be in sequential order (0, 1, 2, 3, ...) matching the Blackbox pad layout:
+
+![Chains - Example for correct order](docs/chains,exampleforcorrectorder.png)
+
+*Correct chain order: chains are numbered sequentially and match the Blackbox pad layout.*
+
+**❌ Bad Order (Jammed):**
+If chains are out of order or jumbled, your pads will be mapped incorrectly:
+
+![Chains - Example of bad order that will result in jammed order](docs/chains-exampleofbadorderthatwill%20resultin%20jammed%20order.png)
+
+*Bad chain order: chains are jumbled and out of sequence. This will cause incorrect pad mapping in the conversion!*
+
+**How to Fix Chain Order:**
+1. Open the Drum Rack device view
+2. Check the chain list order
+3. Drag chains to reorder them if needed
+4. Verify the order matches your intended pad layout before converting
 
 See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflows.
 
