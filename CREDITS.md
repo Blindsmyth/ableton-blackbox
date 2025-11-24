@@ -17,7 +17,7 @@ Original forum thread: https://forum.1010music.com/forum/products/blackbox/suppo
 
 ## Current Maintainer & Enhancements
 
-**Simon** (2024-2025)
+**Simon Schmidt** (2025)
 
 Extended and refactored the original codebase to:
 

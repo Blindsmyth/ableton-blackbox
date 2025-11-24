@@ -6,6 +6,40 @@ A complete, production-ready converter for translating Ableton Live Drum Rack pr
 
 This tool extracts samples, sequences, and settings from Ableton Live `.als` project files and converts them into Blackbox-compatible `.xml` preset files. It's specifically designed for **Drum Rack** workflows, supporting up to 16 pads with full parameter extraction.
 
+## 🎯 Using the Ableton Template (Recommended)
+
+**The easiest way to get started is to use the included Ableton template!**
+
+We've included a ready-to-use Ableton Live template that emulates the Blackbox structure. This template provides the perfect starting point for creating projects that convert seamlessly to Blackbox presets.
+
+### Template Structure
+
+The template (`ableton_template/BB2ALS Template Project/BB2ALS Template.als`) is set up to mirror the Blackbox architecture:
+
+- **16 Drum Rack Cells** = **16 Blackbox Sample Pads**
+  - Each cell in the Drum Rack represents one Blackbox pad
+  - Load your samples into Simplers within each cell
+  - Configure slicing, envelopes, and other settings per pad
+
+- **16 MIDI Tracks** = **16 Blackbox Sequences**
+  - Tracks labeled "Seq1" through "Seq16" correspond to Blackbox sequences
+  - Each track has 4 clip slots (A, B, C, D) representing sub-layers
+  - Route MIDI from these tracks to the Drum Rack to trigger pads
+
+![Ableton Template Screenshot](ableton_template/BB2ALS%20Template%20Project/Screenshot-Ableton.png)
+
+*The template shows the 16 sequence tracks (Seq1-Seq16) and the Pads track with Drum Rack. Each sequence track has 4 clip slots (A-D) for sub-layers, and the Drum Rack contains 16 cells for your samples.*
+
+### Getting Started with the Template
+
+1. Open `ableton_template/BB2ALS Template Project/BB2ALS Template.als` in Ableton Live
+2. Load your samples into the Drum Rack cells (each cell has a Simpler)
+3. Configure your pad settings (slicing, envelopes, choke groups, etc.)
+4. Create MIDI sequences in the Seq1-Seq16 tracks
+5. Convert using the converter tool
+
+See the [Quick Start](#quick-start) section below for conversion instructions.
+
 ## Features
 
 ### 🎯 Complete Drum Rack Support
@@ -27,11 +61,31 @@ This tool extracts samples, sequences, and settings from Ableton Live `.als` pro
 - Supports quantized 16th note sequences
 - Compatible with firmware 2.3+ format
 
+### ✂️ Slicing Mode Support
+
+The converter fully supports Ableton Simpler's slicing mode and converts it to Blackbox slicer pads:
+
+- **Slice Detection**: Automatically detects when Simpler is in Slice mode
+- **Slice Point Extraction**: Extracts slice markers from:
+  - **Transient detection** (based on onset detection)
+  - **Beat slicing** (aligned to beat grid)
+  - **Region slicing** (user-defined regions)
+  - **Manual slicing** (manually placed slice points)
+- **Playback Settings**:
+  - **Play-through mode**: When Simpler playback is set to "Through" or "Play Through", Blackbox playthrough is enabled
+  - **Sync mode**: When Simpler warp is enabled, Blackbox sync is enabled
+  - **Transpose**: Extracts and applies transpose settings from Simpler
+- **Beat Count**: Automatically calculates beat count from sample length (same as clip/stem extraction)
+- **Envelopes**: Uses the same envelope defaults as clip mode
+
+![Slicing Example - Settings: warp, trigger mode, choke groups, bar length](docs/Screenshot-exampleforlongersamples2clips.look%20at%20the%20settings!%20warp,%20set%20to%20trigger,%20choke%20groups,%20bar%20length%20etc..png)
+
+*Example showing slicing settings: warp enabled, trigger mode, choke groups, and bar length configuration.*
+
 ### 🎚️ Advanced Features
 - **Choke Groups**: Automatic extraction and mapping (A-D groups)
 - **Warp Detection**: Identifies time-stretched samples
 - **Sample Rate Handling**: Works with 44.1kHz and 48kHz samples
-- **Slicing Mode**: Detects Simpler slicing pads (transient/beat/region/manual) and emits Blackbox slicer pads with slice markers, play-through, sync, and transpose settings
 - **Output Routing**: Properly routes to main output bus
 - **Error Handling**: Comprehensive logging and graceful error recovery
 
@@ -48,6 +102,7 @@ The original script used a clip-based approach for Ableton Live 10/11. This vers
 - ✅ **Added multi-layer sequence support**
 - ✅ **Implemented WAV file header reading** for accurate sample lengths
 - ✅ **Added beat count calculation** from sample duration and tempo
+- ✅ **Added full slicing mode support** with slice point extraction
 - ✅ **Enhanced error handling** with safe navigation and detailed logging
 - ✅ **Added comprehensive documentation** and workflow guides
 - ✅ **Tested with Ableton Live 12.2/12.3**
@@ -103,6 +158,8 @@ Your Ableton project should be set up as follows:
 1. **Track 1**: Drum Rack with up to 16 Simplers (one per pad)
 2. **Tracks 2-17**: MIDI tracks for sequences (one per pad, optional)
 
+**💡 Tip**: Use the included template (`ableton_template/BB2ALS Template Project/BB2ALS Template.als`) which already has this structure set up!
+
 ### Important: Chain Order
 
 ⚠️ **The converter uses chain order to determine pad positions**, not MIDI note assignments.
@@ -116,6 +173,18 @@ Your Ableton project should be set up as follows:
 - ... and so on
 
 See [WORKFLOWS.md](WORKFLOWS.md) for complete details on pad mapping and workflows.
+
+### Output Routing for MIDI Sequences
+
+For MIDI sequences to work correctly, you need to configure output routing in Ableton:
+
+![Output Routing - Change sequence to pad mapping and enable Keys mode](docs/Screenshot-outputrouting-changeseqtopadmappingandenablekeysmode.png)
+
+*Configure output routing to change sequence to pad mapping and enable Keys mode for proper MIDI sequence conversion.*
+
+![Output Routing - Change to external MIDI mode](docs/Screenshot-outputrouting%20for%20chaning%20to%20external%20midi%20mode.png)
+
+*Output routing settings for changing to external MIDI mode.*
 
 ## Blackbox Pad Layout
 
@@ -138,7 +207,12 @@ Row 3 (bottom):  1   2   3   4
 - ADSR envelope settings
 - Beat counts (calculated from duration and tempo)
 - Clip mode (for samples ≥8 beats)
-- Simpler slicing data (slice points, playback mode, warp sync, transpose)
+- **Slicing mode**:
+  - Slice points (transient, beat, region, or manual)
+  - Play-through mode (from Simpler playback settings)
+  - Sync mode (from Simpler warp settings)
+  - Transpose settings
+  - Beat count calculation
 - Choke groups (A-D)
 - MIDI sequences with multiple sub-layers
 - Tempo
