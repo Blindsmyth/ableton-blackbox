@@ -22,3 +22,7 @@ __pycache__/
 *.swp
 *.swo
 *~
+.cursorrules
+
+# Documentation (internal)
+docs/BRANCHING_STRATEGY.md
