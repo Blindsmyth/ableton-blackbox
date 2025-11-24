@@ -78,9 +78,9 @@ The converter fully supports Ableton Simpler's slicing mode and converts it to B
 - **Beat Count**: Automatically calculates beat count from sample length (same as clip/stem extraction)
 - **Envelopes**: Uses the same envelope defaults as clip mode
 
-![Slicing Example - Settings: warp, trigger mode, choke groups, bar length](docs/Screenshot-exampleforlongersamples2clips.look%20at%20the%20settings!%20warp,%20set%20to%20trigger,%20choke%20groups,%20bar%20length%20etc..png)
+![Slicer Example - Playthrough mode: all transients in the clip are being extracted](docs/Screenshot-example-slicer-playthrough-notethatalltransientsthatareinthecliparebeingextracted!.png)
 
-*Example showing slicing settings: warp enabled, trigger mode, choke groups, and bar length configuration.*
+*Example showing slicer mode with playthrough enabled. Note that all transients that are in the clip are being extracted as slice points.*
 
 ### 🎚️ Advanced Features
 - **Choke Groups**: Automatic extraction and mapping (A-D groups)
